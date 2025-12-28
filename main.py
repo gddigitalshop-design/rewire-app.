@@ -1,35 +1,35 @@
 import streamlit as st
 from groq import Groq
 
-# Configurazione della pagina
-st.set_page_config(page_title="RE-WIRE AI", page_icon="🚀")
-st.title("🚀 RE-WIRE: Assistente Intelligente")
+# Titolo e Configurazione Pagina
+st.set_page_config(page_title="RE-WIRE AI", page_icon="🧠")
+st.title("🧠 RE-WIRE AI")
+st.subheader("La tua intelligenza artificiale personalizzata")
 
-# Barra laterale per la chiave
-with st.sidebar:
-    st.header("Impostazioni")
-    # Qui l'utente può inserire la sua chiave Groq
-    api_key = st.text_input("Inserisci Groq API Key:", type="password")
-    st.info("Prendi la tua chiave gratis su: https://console.groq.com/keys")
+# Recupero automatico della chiave dai Secrets
+try:
+    api_key = st.secrets["GROQ_API_KEY"]
+    client = Groq(api_key=api_key)
+except Exception:
+    st.error("Errore: Chiave API non configurata nei Secrets di Streamlit.")
+    st.stop()
 
-# Area di Chat
-domanda = st.text_input("In cosa posso aiutarti oggi?")
+# Area di input
+user_input = st.text_area("Cosa vuoi chiedermi oggi?", placeholder="Scrivi qui...")
 
 if st.button("Chiedi all'IA"):
-    if not api_key:
-        st.warning("Inserisci la chiave API nella barra a sinistra!")
-    elif not domanda:
-        st.error("Scrivi una domanda!")
-    else:
-        try:
-            client = Groq(api_key=api_key)
-            with st.spinner("L'IA sta pensando..."):
+    if user_input:
+        with st.spinner("Sto pensando..."):
+            try:
+                # Usiamo il modello nuovo che abbiamo testato prima
                 chat_completion = client.chat.completions.create(
-                    messages=[{"role": "user", "content": domanda}],
+                    messages=[{"role": "user", "content": user_input}],
                     model="llama-3.3-70b-versatile",
                 )
                 risposta = chat_completion.choices[0].message.content
-                st.success("Risposta:")
+                st.markdown("### Risposta:")
                 st.write(risposta)
-        except Exception as e:
-            st.error(f"Errore: {e}")
+            except Exception as e:
+                st.error(f"Si è verificato un errore: {e}")
+    else:
+        st.warning("Per favore, inserisci una domanda.")
