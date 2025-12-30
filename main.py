@@ -1,65 +1,62 @@
 import streamlit as st
 import google.generativeai as genai
-from PyPDF2 import PdfReader
 from PIL import Image
+from PyPDF2 import PdfReader
 
-# --- 1. CONFIGURAZIONE API & MODELLO ---
+# --- 1. CONFIGURAZIONE API ---
+# Inserisco la tua chiave che abbiamo testato
 API_KEY = "AIzaSyAI6SNpjbh0nft9dlzxHADUiquQBXDC1pE"
 genai.configure(api_key=API_KEY)
 
-st.set_page_config(page_title="RE-WIRE | AI Strategic Partner", layout="wide", page_icon="🧠")
+# --- 2. CONFIGURAZIONE PAGINA & STILE ---
+st.set_page_config(page_title="RE-WIRE Business Vision", layout="wide")
 
-# --- 2. STILE PREMIUM (BOX NERO E ROSSO) ---
 st.markdown("""
     <style>
     .report-box { 
         background-color: #1E1E1E; color: #FFFFFF; padding: 25px; 
         border-radius: 15px; border-left: 5px solid #FF4B4B; 
         line-height: 1.6; margin-bottom: 20px;
-        box-shadow: 0px 4px 15px rgba(0,0,0,0.5);
     }
-    .stChatMessage { border-radius: 15px; margin-bottom: 10px; }
+    .stChatMessage { border-radius: 15px; }
     </style>
     """, unsafe_allow_html=True)
 
-# --- 3. MEMORIA DELLA SESSIONE ---
+# --- 3. MEMORIA SESSIONE ---
 if "messages" not in st.session_state:
     st.session_state.messages = []
-if "pdf_context" not in st.session_state:
-    st.session_state.pdf_context = ""
 
-# --- 4. BARRA LATERALE (STRUMENTI) ---
+# --- 4. SIDEBAR (IL PEZZO CHE HAI TESTATO) ---
 with st.sidebar:
     st.title("🚀 RE-WIRE Hub")
-    st.info("Oggi è il 30 Dicembre 2025")
+    st.write("Configurazione: **Gemini Vision Attivo**")
     st.divider()
     
-    st.subheader("📁 Carica Allegati")
-    file = st.file_uploader("Immagine (JPG/PNG) o PDF", type=["jpg", "png", "jpeg", "pdf"])
+    st.subheader("📁 Carica Allegato")
+    # Questo è il widget che hai confermato funzionare:
+    file_caricato = st.file_uploader("Scegli un'immagine o un PDF", type=["jpg", "png", "jpeg", "pdf"])
     
-    current_img = None
-    if file:
-        if file.type in ["image/jpeg", "image/png"]:
-            current_img = Image.open(file)
-            st.image(current_img, caption="Immagine pronta", use_container_width=True)
-        elif file.type == "application/pdf":
-            reader = PdfReader(file)
-            text = ""
-            for page in reader.pages:
-                text += page.extract_text() + "\n"
-            st.session_state.pdf_context = text
-            st.success("PDF caricato in memoria!")
+    immagine_per_ai = None
+    testo_pdf = ""
 
-    st.divider()
-    if st.button("🗑️ AZZERA TUTTO", use_container_width=True):
+    if file_caricato:
+        if file_caricato.type in ["image/jpeg", "image/png"]:
+            immagine_per_ai = Image.open(file_caricato)
+            st.image(immagine_per_ai, caption="Anteprima Immagine", use_container_width=True)
+        elif file_caricato.type == "application/pdf":
+            reader = PdfReader(file_caricato)
+            for page in reader.pages:
+                testo_pdf += page.extract_text() + "\n"
+            st.success("PDF caricato!")
+
+    if st.button("🗑️ CANCELLA CHAT", use_container_width=True):
         st.session_state.messages = []
-        st.session_state.pdf_context = ""
         st.rerun()
 
-# --- 5. AREA CHAT PRINCIPALE ---
+# --- 5. CHAT PRINCIPALE ---
 st.title("🧠 RE-WIRE Business Brain")
 
-# Mostra i messaggi salvati
+# Visualizza messaggi precedenti
 for msg in st.session_state.messages:
     with st.chat_message(msg["role"]):
         if msg["role"] == "assistant":
@@ -67,42 +64,36 @@ for msg in st.session_state.messages:
         else:
             st.markdown(msg["content"])
 
-# Input dell'utente
-prompt = st.chat_input("Scrivi qui la tua richiesta...")
+# Input Utente
+prompt = st.chat_input("Scrivi qui la tua richiesta (es. 'Fai un testo per bambini')...")
 
 if prompt:
-    # 1. Mostra il messaggio dell'utente
     st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"):
         st.markdown(prompt)
 
-    # 2. Genera la risposta dell'AI
     with st.chat_message("assistant"):
         with st.spinner("Analisi in corso..."):
             try:
+                # Usiamo il modello Flash che hai testato con successo
                 model = genai.GenerativeModel('gemini-1.5-flash')
                 
-                # Prepariamo il pacchetto da inviare all'AI
-                contenuto_da_inviare = []
+                # Prepariamo la richiesta multimodale
+                input_data = []
+                testo_completo = prompt
+                if testo_pdf:
+                    testo_completo += f"\n\nUsa queste info: {testo_pdf[:5000]}"
                 
-                # Testo + eventuale contesto del PDF
-                testo_finale = prompt
-                if st.session_state.pdf_context:
-                    testo_finale += f"\n\n[CONTESTO PDF CARICATO]:\n{st.session_state.pdf_text[:5000]}"
-                
-                contenuto_da_inviare.append(testo_finale)
-                
-                # Aggiungiamo l'immagine se presente
-                if current_img:
-                    contenuto_da_inviare.append(current_img)
+                input_data.append(testo_completo)
+                if immagine_per_ai:
+                    input_data.append(immagine_per_ai)
 
-                # Chiamata all'API
-                response = model.generate_content(contenuto_da_inviare)
-                risposta_ai = response.text
+                # Risposta dell'AI
+                response = model.generate_content(input_data)
+                risposta_testo = response.text
                 
-                # Visualizzazione elegante
-                st.markdown(f'<div class="report-box">{risposta_ai}</div>', unsafe_allow_html=True)
-                st.session_state.messages.append({"role": "assistant", "content": risposta_ai})
+                st.markdown(f'<div class="report-box">{risposta_testo}</div>', unsafe_allow_html=True)
+                st.session_state.messages.append({"role": "assistant", "content": risposta_testo})
                 
             except Exception as e:
                 st.error(f"Errore: {e}")
