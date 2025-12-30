@@ -7,36 +7,40 @@ from PyPDF2 import PdfReader
 # --- 1. CONFIGURAZIONE PAGINA ---
 st.set_page_config(page_title="RE-WIRE Business Brain", layout="wide", page_icon="📈")
 
-# --- 2. SISTEMA DI LOGIN ---
-def check_login():
-    if "authenticated" not in st.session_state:
-        st.session_state.authenticated = False
+# --- 2. LOGICA DI LOGIN ---
+if "authenticated" not in st.session_state:
+    st.session_state.authenticated = False
 
+def check_login():
     if not st.session_state.authenticated:
         st.markdown("<h1 style='text-align: center;'>🔐 RE-WIRE Business Access</h1>", unsafe_allow_html=True)
-        col1, col2, col3 = st.columns([1,2,1])
+        
+        # Centriamo il modulo di login
+        col1, col2, col3 = st.columns([1,1,1])
         with col2:
-            user = st.text_input("Username")
-            password = st.text_input("Password", type="password")
+            input_user = st.text_input("Username", key="user")
+            input_pass = st.text_input("Password", type="password", key="pass")
+            
             if st.button("ACCEDI AL SISTEMA", use_container_width=True):
-                if user == "admin" and password == "rewire2025":
+                # CONTROLLO CREDENZIALI (Modifica qui per il cliente)
+                if input_user == "admin" and input_pass == "12345":
                     st.session_state.authenticated = True
                     st.rerun()
                 else:
-                    st.error("Credenziali non valide.")
+                    st.error("Credenziali non valide. Riprova.")
         return False
     return True
 
-# --- ESECUZIONE APP ---
+# --- ESECUZIONE APP (Solo se autenticato) ---
 if check_login():
     
-    # Inizializzazione Session State
+    # Inizializzazione Session State per i dati
     if "current_template" not in st.session_state:
         st.session_state.current_template = None
     if "last_prompt" not in st.session_state:
         st.session_state.last_prompt = ""
 
-    # Funzione PDF
+    # Funzione per creare il PDF
     def crea_pdf_output(testo):
         pdf = FPDF()
         pdf.add_page()
@@ -51,7 +55,7 @@ if check_login():
     # --- 3. BARRA LATERALE ---
     with st.sidebar:
         st.title("⚙️ RE-WIRE Hub")
-        st.write("Stato: **Connesso**")
+        st.write("Utente: **Amministratore**")
         
         tipo_lavoro = st.selectbox(
             "Modelli Strategici:",
@@ -72,7 +76,7 @@ if check_login():
                     contenuto_file = uploaded_file.getvalue().decode("utf-8")
                 st.success("File caricato")
             except:
-                st.error("Errore file")
+                st.error("Errore lettura file")
 
         st.divider()
 
@@ -84,7 +88,6 @@ if check_login():
             except:
                 st.error("Errore PDF")
 
-        # FIX INDENTAZIONE QUI
         if st.button("🗑️ RESET SESSIONE", use_container_width=True):
             st.session_state.current_template = None
             st.session_state.last_prompt = ""
@@ -113,7 +116,9 @@ if check_login():
                     st.session_state.last_prompt = c_prompt
                     st.rerun()
                 except Exception as e:
-                    st.error(f"Errore: {e}")
+                    st.error(f"Errore API: {e}")
+        else:
+            st.warning("Inserisci dati per procedere.")
 
     if st.session_state.current_template:
         st.markdown(
