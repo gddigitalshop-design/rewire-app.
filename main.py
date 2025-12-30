@@ -87,19 +87,49 @@ with st.sidebar:
 st.markdown(f"### Benvenuto, {st.session_state.user_role.capitalize()}")
 
 # Sezione ✨ Generatore Creativo
-with st.expander("✨ GENERATORE DI IMMAGINI E TEMPLATE", expanded=True):
-    creative_input = st.text_input("Cosa vuoi creare oggi?")
-    col_img, col_temp = st.columns(2)
-    
-    with col_img:
-        if st.button("🖼️ Genera Immagine"):
-            if creative_input:  # <-- Questa riga deve avere uno spazio extra a sinistra rispetto a 'if st.button'
-                with st.spinner("Creazione immagine..."):
-                    img_url = genera_immagine(creative_input)
-                    st.image(img_url, caption=f"Risultato per: {creative_input}")
-                    st.session_state.messages.append({"role": "assistant", "content": f"Immagine: {img_url}"})
-            else:
-                st.warning("Scrivi qualcosa prima!")
+# --- GENERATORE CREATIVO PROFESSIONALE ---
+st.header("✨ Generatore Creativo")
+c_prompt = st.text_input("Descrivi cosa vuoi creare (es. tegole sarde, logo, piano marketing)...")
+
+col1, col2 = st.columns(2)
+
+with col1:
+    if st.button("🖼️ Genera Immagine"):
+        if c_prompt:
+            with st.spinner("Creazione in corso..."):
+                img_url = genera_immagine(c_prompt)
+                # Salviamo l'URL nello stato dell'app per visualizzarlo
+                st.session_state.current_img = img_url
+        else:
+            st.warning("Inserisci una descrizione!")
+
+with col2:
+    if st.button("📝 Crea Template"):
+        if c_prompt:
+            with st.spinner("Generazione template..."):
+                client = Groq(api_key=st.secrets["GROQ_API_KEY"])
+                res = client.chat.completions.create(
+                    messages=[{"role": "system", "content": "Sei un esperto aziendale. Crea template chiari."},
+                              {"role": "user", "content": f"Crea un template per: {c_prompt}"}],
+                    model="llama-3.3-70b-versatile"
+                )
+                st.session_state.current_template = res.choices[0].message.content
+        else:
+            st.warning("Inserisci una descrizione!")
+
+# --- AREA DI VISUALIZZAZIONE (Fondamentale per non avere solo link) ---
+if "current_img" in st.session_state and st.session_state.current_img:
+    st.image(st.session_state.current_img, caption=f"Risultato per: {c_prompt}", use_container_width=True)
+    if st.button("🗑️ Rimuovi Immagine"):
+        st.session_state.current_img = None
+        st.rerun()
+
+if "current_template" in st.session_state and st.session_state.current_template:
+    st.info("Template Generato:")
+    st.markdown(st.session_state.current_template)
+    if st.button("🗑️ Rimuovi Template"):
+        st.session_state.current_template = None
+        st.rerun()
 
     with col_temp:
         if st.button("📝 Crea Template"):
@@ -138,6 +168,7 @@ if prompt := st.chat_input("Chiedi un'analisi o una strategia..."):
         response = compl.choices[0].message.content
         st.markdown(response)
         st.session_state.messages.append({"role": "assistant", "content": response})
+
 
 
 
