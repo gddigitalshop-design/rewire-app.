@@ -1,10 +1,9 @@
 import streamlit as st
 import google.generativeai as genai
 from PyPDF2 import PdfReader
-from PIL import Image # Necessario per le immagini
+from PIL import Image
 
 # --- 1. CONFIGURAZIONE API ---
-# La tua chiave Gemini
 API_KEY = "AIzaSyApziQVDY3_L9-q_NSOufAFab_syWdRFYY"
 genai.configure(api_key=API_KEY)
 
@@ -30,7 +29,7 @@ if "doc_context" not in st.session_state:
 # --- 4. SIDEBAR ---
 with st.sidebar:
     st.title("🚀 RE-WIRE Hub")
-    st.write("Stato: **Gemini Vision Attivo**")
+    st.write("Motore: **Gemini 1.5 Flash**")
     st.divider()
     
     uploaded_file = st.file_uploader("Carica Immagine o PDF", type=["jpg", "png", "jpeg", "pdf", "txt"])
@@ -50,7 +49,7 @@ with st.sidebar:
             except:
                 st.error("Errore lettura PDF")
     
-    if st.button("🧹 NUOVA SESSIONE", use_container_width=True):
+    if st.button("🗑️ RESET CHAT", use_container_width=True):
         st.session_state.messages = []
         st.session_state.doc_context = ""
         st.rerun()
@@ -65,7 +64,7 @@ for msg in st.session_state.messages:
         else:
             st.markdown(msg["content"])
 
-prompt = st.chat_input("Scrivi qui (es. Descrivi questa immagine per un bambino)...")
+prompt = st.chat_input("Scrivi qui (es. Descrivi l'immagine per un bambino)...")
 
 if prompt:
     st.session_state.messages.append({"role": "user", "content": prompt})
@@ -75,20 +74,32 @@ if prompt:
     with st.chat_message("assistant"):
         with st.spinner("Analisi in corso..."):
             try:
-                model = genai.GenerativeModel('gemini-1.5-flash')
+                # CORREZIONE QUI: Usiamo il nome del modello senza prefissi strani
+                model = genai.GenerativeModel('gemini-1.5-flash-latest')
                 
-                # Prepariamo la richiesta multimodale
-                request_parts = [prompt]
-                if img_to_send:
-                    request_parts.append(img_to_send)
+                # Prepariamo la richiesta
+                request_content = []
+                
+                # Aggiungiamo il prompt testuale
+                full_prompt = prompt
                 if st.session_state.doc_context:
-                    request_parts.append(f"\n\nContesto: {st.session_state.doc_context[:5000]}")
-
-                response = model.generate_content(request_parts)
-                answer = response.text
+                    full_prompt += f"\n\nUsa queste informazioni dal PDF: {st.session_state.doc_context[:5000]}"
                 
-                st.markdown(f'<div class="report-box">{answer}</div>', unsafe_allow_html=True)
-                st.session_state.messages.append({"role": "assistant", "content": answer})
+                request_content.append(full_prompt)
+                
+                # Se c'è un'immagine, la aggiungiamo alla lista
+                if img_to_send:
+                    request_content.append(img_to_send)
+
+                # Generazione
+                response = model.generate_content(request_content)
+                
+                if response.text:
+                    answer = response.text
+                    st.markdown(f'<div class="report-box">{answer}</div>', unsafe_allow_html=True)
+                    st.session_state.messages.append({"role": "assistant", "content": answer})
+                else:
+                    st.error("L'AI non ha prodotto testo. Riprova con un'altra immagine.")
                 
             except Exception as e:
-                st.error(f"Errore: {e}")
+                st.error(f"Errore di connessione: {e}")
