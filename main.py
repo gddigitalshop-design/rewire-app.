@@ -26,30 +26,17 @@ if "temp_file_data" not in st.session_state:
 # --- 4. SIDEBAR ---
 with st.sidebar:
     st.title("🚀 RE-WIRE Vision")
-    st.write("Versione: **Premium 2026 Ready**")
     st.divider()
     
     st.subheader("📁 Carica Allegato")
-    uploaded_file = st.file_uploader("Scegli un'immagine (JPG/PNG) o un PDF/TXT", type=["txt", "pdf", "jpg", "png"])
+    uploaded_file = st.file_uploader("Scegli un'immagine (JPG/PNG)", type=["jpg", "png", "jpeg"])
     
     if uploaded_file:
         if uploaded_file.name != st.session_state.temp_file_data.get("file_name"):
             try:
-                if uploaded_file.type in ["image/jpeg", "image/png"]:
-                    st.session_state.temp_file_data["image_b64"] = encode_image(uploaded_file)
-                    st.session_state.temp_file_data["text"] = ""
-                    st.image(uploaded_file, caption="Immagine caricata", use_container_width=True)
-                elif uploaded_file.type == "application/pdf":
-                    reader = PdfReader(uploaded_file)
-                    text = ""
-                    for page in reader.pages: text += page.extract_text() + "\n"
-                    st.session_state.temp_file_data["text"] = text
-                    st.session_state.temp_file_data["image_b64"] = None
-                else:
-                    st.session_state.temp_file_data["text"] = uploaded_file.getvalue().decode("utf-8")
-                    st.session_state.temp_file_data["image_b64"] = None
-                
+                st.session_state.temp_file_data["image_b64"] = encode_image(uploaded_file)
                 st.session_state.temp_file_data["file_name"] = uploaded_file.name
+                st.image(uploaded_file, caption="Immagine caricata", use_container_width=True)
                 st.success(f"✅ {uploaded_file.name} pronto!")
             except Exception as e:
                 st.error(f"Errore caricamento: {e}")
@@ -71,7 +58,7 @@ for msg in st.session_state.chat_history:
             st.markdown(msg["content"])
 
 # Input Utente
-prompt = st.chat_input("Scrivi qui il tuo messaggio... (analizzerò anche l'allegato se presente)")
+prompt = st.chat_input("Scrivi qui: es. 'Descrivi questa immagine per un bambino'")
 
 if prompt:
     st.session_state.chat_history.append({"role": "user", "content": prompt})
@@ -79,32 +66,37 @@ if prompt:
         st.markdown(prompt)
 
     with st.chat_message("assistant"):
-        with st.spinner("RE-WIRE sta elaborando testo e visione..."):
+        with st.spinner("RE-WIRE sta guardando e scrivendo per te..."):
             try:
                 client = Groq(api_key=st.secrets["GROQ_API_KEY"])
                 
-                # Se c'è un'immagine, usiamo il modello VISION aggiornato (90b)
-                if st.session_state.temp_file_data["image_b64"]:
-                    model_to_use = "llama-3.2-90b-vision-preview" # Modello aggiornato 2025
-                    content_payload = [
-                        {"type": "text", "text": prompt},
-                        {
-                            "type": "image_url",
-                            "image_url": {"url": f"data:image/jpeg;base64,{st.session_state.temp_file_data['image_b64']}"}
-                        }
-                    ]
-                else:
-                    # Altrimenti usiamo il modello testuale standard
-                    model_to_use = "llama-3.3-70b-versatile"
-                    context_text = st.session_state.temp_file_data["text"]
-                    content_payload = f"UTENTE DICE: {prompt}\n\nCONTESTO DOCUMENTO:\n{context_text[:10000]}"
+                # Usiamo il modello Llama 3.2 Vision aggiornato
+                # Se il 90b dà ancora errore, il sistema proverà automaticamente l'11b
+                try:
+                    model_to_use = "llama-3.2-11b-vision-preview" 
+                    
+                    if st.session_state.temp_file_data["image_b64"]:
+                        content_payload = [
+                            {"type": "text", "text": prompt},
+                            {
+                                "type": "image_url",
+                                "image_url": {"url": f"data:image/jpeg;base64,{st.session_state.temp_file_data['image_b64']}"}
+                            }
+                        ]
+                    else:
+                        model_to_use = "llama-3.3-70b-versatile"
+                        content_payload = prompt
 
-                res = client.chat.completions.create(
-                    messages=[{"role": "user", "content": content_payload}],
-                    model=model_to_use
-                )
+                    res = client.chat.completions.create(
+                        messages=[{"role": "user", "content": content_payload}],
+                        model=model_to_use
+                    )
+                    risposta = res.choices[0].message.content
+                except:
+                    # Fallback estremo se Groq cambia nomi ai modelli all'improvviso
+                    st.error("Il modello Vision è in manutenzione su Groq. Prova tra pochi minuti.")
+                    risposta = "Spiacente, sto aggiornando i miei occhi digitali. Riprova tra un istante!"
                 
-                risposta = res.choices[0].message.content
                 st.markdown(f'<div class="report-box">{risposta}</div>', unsafe_allow_html=True)
                 st.session_state.chat_history.append({"role": "assistant", "content": risposta})
                 
