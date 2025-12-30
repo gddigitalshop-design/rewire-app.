@@ -1,40 +1,108 @@
 import streamlit as st
 import google.generativeai as genai
+from PyPDF2 import PdfReader
 from PIL import Image
 
-# --- CONFIGURAZIONE ---
-# Ho inserito la tua nuova chiave qui
-genai.configure(api_key="AIzaSyAI6SNpjbh0nft9dlzxHADUiquQBXDC1pE")
+# --- 1. CONFIGURAZIONE API & MODELLO ---
+API_KEY = "AIzaSyAI6SNpjbh0nft9dlzxHADUiquQBXDC1pE"
+genai.configure(api_key=API_KEY)
 
-st.set_page_config(page_title="RE-WIRE Vision", layout="centered")
-st.title("🧠 RE-WIRE Business Vision")
-st.write("Carica un'immagine e io la analizzerò per te.")
+st.set_page_config(page_title="RE-WIRE | AI Strategic Partner", layout="wide", page_icon="🧠")
 
-# --- CARICAMENTO ---
-file_caricato = st.file_uploader("Scegli un'immagine dal tuo PC", type=["jpg", "png", "jpeg"])
+# --- 2. STILE PREMIUM (BOX NERO E ROSSO) ---
+st.markdown("""
+    <style>
+    .report-box { 
+        background-color: #1E1E1E; color: #FFFFFF; padding: 25px; 
+        border-radius: 15px; border-left: 5px solid #FF4B4B; 
+        line-height: 1.6; margin-bottom: 20px;
+        box-shadow: 0px 4px 15px rgba(0,0,0,0.5);
+    }
+    .stChatMessage { border-radius: 15px; margin-bottom: 10px; }
+    </style>
+    """, unsafe_allow_html=True)
 
-if file_caricato:
-    # Mostriamo la foto sullo schermo
-    immagine = Image.open(file_caricato)
-    st.image(immagine, caption="Immagine caricata con successo!", use_container_width=True)
+# --- 3. MEMORIA DELLA SESSIONE ---
+if "messages" not in st.session_state:
+    st.session_state.messages = []
+if "pdf_context" not in st.session_state:
+    st.session_state.pdf_context = ""
+
+# --- 4. BARRA LATERALE (STRUMENTI) ---
+with st.sidebar:
+    st.title("🚀 RE-WIRE Hub")
+    st.info("Oggi è il 30 Dicembre 2025")
+    st.divider()
     
-    # Casella di testo per la tua richiesta
-    istruzione = st.text_input("Cosa devo fare?", "Descrivi questa immagine per un bambino in modo breve")
+    st.subheader("📁 Carica Allegati")
+    file = st.file_uploader("Immagine (JPG/PNG) o PDF", type=["jpg", "png", "jpeg", "pdf"])
+    
+    current_img = None
+    if file:
+        if file.type in ["image/jpeg", "image/png"]:
+            current_img = Image.open(file)
+            st.image(current_img, caption="Immagine pronta", use_container_width=True)
+        elif file.type == "application/pdf":
+            reader = PdfReader(file)
+            text = ""
+            for page in reader.pages:
+                text += page.extract_text() + "\n"
+            st.session_state.pdf_context = text
+            st.success("PDF caricato in memoria!")
 
-    # TASTO PER FAR PARTIRE L'AI
-    if st.button("🚀 ANALIZZA ORA"):
-        with st.spinner("Sto leggendo l'immagine..."):
+    st.divider()
+    if st.button("🗑️ AZZERA TUTTO", use_container_width=True):
+        st.session_state.messages = []
+        st.session_state.pdf_context = ""
+        st.rerun()
+
+# --- 5. AREA CHAT PRINCIPALE ---
+st.title("🧠 RE-WIRE Business Brain")
+
+# Mostra i messaggi salvati
+for msg in st.session_state.messages:
+    with st.chat_message(msg["role"]):
+        if msg["role"] == "assistant":
+            st.markdown(f'<div class="report-box">{msg["content"]}</div>', unsafe_allow_html=True)
+        else:
+            st.markdown(msg["content"])
+
+# Input dell'utente
+prompt = st.chat_input("Scrivi qui la tua richiesta...")
+
+if prompt:
+    # 1. Mostra il messaggio dell'utente
+    st.session_state.messages.append({"role": "user", "content": prompt})
+    with st.chat_message("user"):
+        st.markdown(prompt)
+
+    # 2. Genera la risposta dell'AI
+    with st.chat_message("assistant"):
+        with st.spinner("Analisi in corso..."):
             try:
-                # Usiamo il modello Flash (il più veloce e moderno)
                 model = genai.GenerativeModel('gemini-1.5-flash')
                 
-                # Chiediamo all'AI di guardare e rispondere
-                risposta = model.generate_content([istruzione, immagine])
+                # Prepariamo il pacchetto da inviare all'AI
+                contenuto_da_inviare = []
                 
-                # Risultato finale
-                st.subheader("Ecco il risultato:")
-                st.success(risposta.text)
+                # Testo + eventuale contesto del PDF
+                testo_finale = prompt
+                if st.session_state.pdf_context:
+                    testo_finale += f"\n\n[CONTESTO PDF CARICATO]:\n{st.session_state.pdf_text[:5000]}"
+                
+                contenuto_da_inviare.append(testo_finale)
+                
+                # Aggiungiamo l'immagine se presente
+                if current_img:
+                    contenuto_da_inviare.append(current_img)
+
+                # Chiamata all'API
+                response = model.generate_content(contenuto_da_inviare)
+                risposta_ai = response.text
+                
+                # Visualizzazione elegante
+                st.markdown(f'<div class="report-box">{risposta_ai}</div>', unsafe_allow_html=True)
+                st.session_state.messages.append({"role": "assistant", "content": risposta_ai})
                 
             except Exception as e:
-                st.error(f"C'è ancora un problema tecnico: {e}")
-                st.info("Se vedi ancora '404', vai su https://aistudio.google.com/ e accetta i contratti di Google.")
+                st.error(f"Errore: {e}")
