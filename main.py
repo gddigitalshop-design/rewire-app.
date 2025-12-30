@@ -49,7 +49,9 @@ def login_page():
 
 if not st.session_state.logged_in:
     login_page()
-    st.stop()
+    st.stop()# --- TITOLO SEMPRE VISIBILE IN ALTO ---
+st.markdown('<p style="font-size:2rem; font-weight:800; color:#007BFF; text-align:center;">RE-WIRE Business Brain</p>', unsafe_allow_html=True)
+st.divider() # Aggiunge una linea sottile di separazione
 
 # --- 4. LOGICA DOWNLOAD REPORT (La "Memoria" per il cliente) ---
 def genera_report():
@@ -106,3 +108,4 @@ if prompt := st.chat_input("Di cosa vogliamo discutere oggi?"):
         resp = compl.choices[0].message.content
         st.markdown(resp)
         st.session_state.messages.append({"role": "assistant", "content": resp})
+
