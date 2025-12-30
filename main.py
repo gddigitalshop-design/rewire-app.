@@ -6,173 +6,133 @@ import requests
 import io
 from PIL import Image
 
-# ==================================================
-# CONFIGURAZIONE PAGINA
-# ==================================================
+# --------------------------------------------------
+# 1. CONFIGURAZIONE PAGINA E STILE
+# --------------------------------------------------
 st.set_page_config(
     page_title="RE-WIRE Business",
-    layout="wide"
+    layout="wide",
+    initial_sidebar_state="expanded"
 )
 
-# ==================================================
-# SESSION STATE
-# ==================================================
+# Inizializzazione variabili di sessione
 if "logged_in" not in st.session_state:
     st.session_state.logged_in = False
-
 if "user_role" not in st.session_state:
-    st.session_state.user_role = ""
-
+    st.session_state.user_role = None
 if "current_img_data" not in st.session_state:
     st.session_state.current_img_data = None
-
 if "current_template" not in st.session_state:
     st.session_state.current_template = None
 
-# ==================================================
-# LOGIN
-# ==================================================
+# --------------------------------------------------
+# 2. SISTEMA LOGIN (Persistente)
+# --------------------------------------------------
 USERS = {
     "admin": "tuapassword123",
     "cliente1": "rewire2025"
 }
 
 def login_system():
-    st.markdown(
-        "<h1 style='text-align:center;color:#007BFF;'>RE-WIRE PLATFORM</h1>",
-        unsafe_allow_html=True
-    )
-
-    col_left, col_center, col_right = st.columns([1, 2, 1])
-
-    with col_center:
-        username = st.text_input("Username")
-        password = st.text_input("Password", type="password")
+    st.markdown("<h1 style='text-align:center;color:#007BFF;'>RE-WIRE PLATFORM</h1>", unsafe_allow_html=True)
+    col1, col2, col3 = st.columns([1, 2, 1])
+    with col2:
+        # L'uso di chiavi univoche permette al browser di salvare le credenziali
+        u = st.text_input("Username", key="login_user")
+        p = st.text_input("Password", type="password", key="login_pass")
 
         if st.button("ACCEDI", use_container_width=True):
-            if username in USERS and USERS[username] == password:
+            if u in USERS and USERS[u] == p:
                 st.session_state.logged_in = True
-                st.session_state.user_role = username
+                st.session_state.user_role = u
                 st.rerun()
             else:
-                st.error("Credenziali non valide")
+                st.error("Credenziali errate. Riprova.")
 
-# ==================================================
-# BLOCCO ACCESSO
-# ==================================================
 if not st.session_state.logged_in:
     login_system()
     st.stop()
 
-# ==================================================
-# SIDEBAR
-# ==================================================
+# --------------------------------------------------
+# 3. BARRA LATERALE (Pulsanti di controllo fissi)
+# --------------------------------------------------
 with st.sidebar:
-    st.title("⚙️ Pannello di Controllo")
+    st.title("⚙️ Gestione")
     st.write(f"Utente: **{st.session_state.user_role}**")
     st.divider()
-
-    if st.button("🗑️ Cancella Sessione", use_container_width=True):
+    
+    # Pulsanti sempre visibili per l'utente
+    if st.button("🗑️ CANCELLA SESSIONE", use_container_width=True):
         st.session_state.current_img_data = None
         st.session_state.current_template = None
         st.rerun()
-
-    if st.button("🚪 Logout", use_container_width=True):
+        
+    if st.button("🚪 ESCI (LOGOUT)", use_container_width=True):
         st.session_state.logged_in = False
-        st.session_state.user_role = ""
+        st.session_state.user_role = None
         st.rerun()
 
-# ==================================================
-# AREA PRINCIPALE
-# ==================================================
+# --------------------------------------------------
+# 4. AREA DI GENERAZIONE PRINCIPALE
+# --------------------------------------------------
 st.header("🚀 Business Hub")
+c_prompt = st.text_input("Descrivi la tua idea (es: Centro commerciale moderno, Logo tech, Strategia Market)")
 
-prompt = st.text_input(
-    "Descrivi la tua idea",
-    placeholder="Esempio: brand tech, logo moderno, strategia marketing"
-)
+col_btn1, col_btn2 = st.columns(2)
 
-col_img, col_tpl = st.columns(2)
-
-# ==================================================
-# GENERAZIONE IMMAGINE
-# ==================================================
-with col_img:
-    if st.button("🖼️ Genera Immagine HD", use_container_width=True):
-        if prompt.strip() == "":
-            st.warning("Inserisci una descrizione")
-        else:
-            with st.spinner("Generazione immagine in corso..."):
+with col_btn1:
+    if st.button("🖼️ GENERA IMMAGINE HD", use_container_width=True):
+        if c_prompt:
+            with st.spinner("L'AI sta disegnando..."):
+                seed = random.randint(1, 1000000)
+                url = f"https://image.pollinations.ai/prompt/{urllib.parse.quote(c_prompt)}?width=1024&height=1024&seed={seed}&nologo=true&model=flux"
                 try:
-                    seed = random.randint(1, 999999)
-
-                    url = (
-                        "https://pollinations.ai/p/"
-                        + urllib.parse.quote(prompt)
-                        + f"?width=1024&height=1024"
-                        + f"&seed={seed}&model=flux&nologo=true"
-                    )
-
-                    response = requests.get(url, timeout=25)
-                    Image.open(io.BytesIO(response.content))  # verifica immagine
-                    st.session_state.current_img_data = response.content
-
-                except Exception as e:
-                    st.error("Errore durante la generazione dell'immagine")
-                    st.write(e)
-
-# ==================================================
-# GENERAZIONE TEMPLATE BUSINESS (GROQ)
-# ==================================================
-with col_tpl:
-    if st.button("📝 Crea Template Business", use_container_width=True):
-        if prompt.strip() == "":
-            st.warning("Inserisci una descrizione")
+                    r = requests.get(url, timeout=25)
+                    # Verifica se è un'immagine valida o un errore HTML (Rate Limit)
+                    img_check = Image.open(io.BytesIO(r.content))
+                    st.session_state.current_img_data = r.content
+                except:
+                    st.error("⚠️ Server immagini saturo (Rate Limit). Riprova tra 30 secondi.")
         else:
-            with st.spinner("Creazione template strategico..."):
+            st.warning("Inserisci una descrizione!")
+
+with col_btn2:
+    if st.button("📝 CREA TEMPLATE", use_container_width=True):
+        if c_prompt:
+            with st.spinner("Scrittura template..."):
                 try:
+                    # Assicurati di avere la chiave GROQ_API_KEY nei Secrets di Streamlit
                     client = Groq(api_key=st.secrets["GROQ_API_KEY"])
-
-                    completion = client.chat.completions.create(
-                        model="llama3-8b-8192",
-                        messages=[
-                            {
-                                "role": "user",
-                                "content": f"""
-                                Crea un template business professionale per:
-                                {prompt}
-
-                                Includi:
-                                - Vision
-                                - Target
-                                - Proposta di valore
-                                - Canali di marketing
-                                - Monetizzazione
-                                - Prossimi step operativi
-                                """
-                            }
-                        ],
-                        temperature=0.7,
-                        max_tokens=900
+                    res = client.chat.completions.create(
+                        messages=[{"role": "user", "content": f"Crea un template business per: {c_prompt}"}],
+                        model="llama-3.3-70b-versatile"
                     )
+                    st.session_state.current_template = res.choices[0].message.content
+                except:
+                    st.error("Errore API Groq. Verifica la tua chiave API.")
 
-                    st.session_state.current_template = (
-                        completion.choices[0].message.content
-                    )
-
-                except Exception as e:
-                    st.error("Errore durante la generazione del template")
-                    st.write(e)
-
-# ==================================================
-# OUTPUT RISULTATI
-# ==================================================
+# --------------------------------------------------
+# 5. VISUALIZZAZIONE RISULTATI E SALVATAGGIO
+# --------------------------------------------------
 st.divider()
 
 if st.session_state.current_img_data:
-    st.subheader("🖼️ Immagine Generata")
+    st.subheader("🖼️ Anteprima Progetto")
     st.image(st.session_state.current_img_data, use_container_width=True)
+    st.download_button(
+        label="💾 SCARICA IMMAGINE",
+        data=st.session_state.current_img_data,
+        file_name="progetto_rewire.png",
+        mime="image/png",
+        use_container_width=True
+    )
 
 if st.session_state.current_template:
-    st.subheader("📄 Template Business")
-    st.markdown(st.session_state.current_template)
+    st.subheader("📝 Template Strategico")
+    st.info(st.session_state.current_template)
+    st.download_button(
+        label="💾 SCARICA TESTO",
+        data=st.session_state.current_template,
+        file_name="strategia_rewire.txt",
+        use_container_width=True
+    )
