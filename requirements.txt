@@ -1,4 +1,4 @@
 streamlit
-groq
-fpdf2
+google-generativeai
 PyPDF2
+Pillow
