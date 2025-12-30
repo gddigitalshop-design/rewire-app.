@@ -1,56 +1,65 @@
 import streamlit as st
-from groq import Groq
+import google.generativeai as genai
 from PyPDF2 import PdfReader
-import base64
+from PIL import Image
+import io
 
-# --- 1. SETTING ESTETICO ---
-st.set_page_config(page_title="RE-WIRE | Business Vision Pro", layout="wide", page_icon="🧠")
+# --- 1. CONFIGURAZIONE API ---
+# Inserisco la tua chiave direttamente per testarla, ma ricorda di metterla nei Secrets in futuro!
+API_KEY = "AIzaSyApziQVDY3_L9-q_NSOufAFab_syWdRFYY"
+genai.configure(api_key=API_KEY)
 
+st.set_page_config(page_title="RE-WIRE | AI Vision & Strategy", layout="wide", page_icon="🧠")
+
+# --- 2. STILE CSS ---
 st.markdown("""
     <style>
-    .report-box { background-color: #1E1E1E; color: #FFFFFF; padding: 25px; border-radius: 12px; border-left: 5px solid #FF4B4B; margin-bottom: 20px; box-shadow: 0px 4px 10px rgba(0,0,0,0.3); }
+    .report-box { 
+        background-color: #1E1E1E; color: #FFFFFF; padding: 25px; 
+        border-radius: 15px; border-left: 5px solid #FF4B4B; 
+        line-height: 1.6; margin-bottom: 20px;
+    }
     .stChatMessage { border-radius: 15px; }
     </style>
     """, unsafe_allow_html=True)
 
-# --- 2. FUNZIONE PER ENCODE IMMAGINI ---
-def encode_image(image_file):
-    return base64.b64encode(image_file.read()).decode('utf-8')
+# --- 3. LOGICA DI MEMORIA ---
+if "messages" not in st.session_state:
+    st.session_state.messages = []
+if "doc_context" not in st.session_state:
+    st.session_state.doc_context = ""
 
-# --- 3. GESTIONE MEMORIA ---
-if "chat_history" not in st.session_state:
-    st.session_state.chat_history = []
-if "temp_file_data" not in st.session_state:
-    st.session_state.temp_file_data = {"text": "", "image_b64": None, "file_name": None}
-
-# --- 4. SIDEBAR ---
+# --- 4. SIDEBAR (CARICAMENTO FILE) ---
 with st.sidebar:
-    st.title("🚀 RE-WIRE Vision")
+    st.title("🚀 RE-WIRE Hub")
+    st.write("Stato: **Gemini Vision Attivo**")
     st.divider()
     
-    st.subheader("📁 Carica Allegato")
-    uploaded_file = st.file_uploader("Scegli un'immagine (JPG/PNG)", type=["jpg", "png", "jpeg"])
+    uploaded_file = st.file_uploader("Carica Immagine (JPG/PNG) o PDF", type=["jpg", "png", "jpeg", "pdf", "txt"])
     
+    img_to_send = None
     if uploaded_file:
-        if uploaded_file.name != st.session_state.temp_file_data.get("file_name"):
-            try:
-                st.session_state.temp_file_data["image_b64"] = encode_image(uploaded_file)
-                st.session_state.temp_file_data["file_name"] = uploaded_file.name
-                st.image(uploaded_file, caption="Immagine caricata", use_container_width=True)
-                st.success(f"✅ {uploaded_file.name} pronto!")
-            except Exception as e:
-                st.error(f"Errore caricamento: {e}")
-
-    if st.button("🧹 PULISCI TUTTO", use_container_width=True):
-        st.session_state.chat_history = []
-        st.session_state.temp_file_data = {"text": "", "image_b64": None, "file_name": None}
+        if uploaded_file.type in ["image/jpeg", "image/png"]:
+            img_to_send = Image.open(uploaded_file)
+            st.image(img_to_send, caption="Anteprima Immagine", use_container_width=True)
+        elif uploaded_file.type == "application/pdf":
+            reader = PdfReader(uploaded_file)
+            text = ""
+            for page in reader.pages: text += page.extract_text() + "\n"
+            st.session_state.doc_context = text
+            st.success("Testo PDF estratto!")
+    
+    st.divider()
+    if st.button("🧹 NUOVA SESSIONE", use_container_width=True):
+        st.session_state.messages = []
+        st.session_state.doc_context = ""
         st.rerun()
 
 # --- 5. AREA CHAT ---
 st.title("🧠 RE-WIRE Business Brain")
 
-# Mostra messaggi precedenti
-for msg in st.session_state.chat_history:
+# Mostra lo storico
+for msg in st.session_state.messages:
     with st.chat_message(msg["role"]):
         if msg["role"] == "assistant":
             st.markdown(f'<div class="report-box">{msg["content"]}</div>', unsafe_allow_html=True)
@@ -58,47 +67,36 @@ for msg in st.session_state.chat_history:
             st.markdown(msg["content"])
 
 # Input Utente
-prompt = st.chat_input("Scrivi qui: es. 'Descrivi questa immagine per un bambino'")
+prompt = st.chat_input("Chiedimi qualsiasi cosa, carica un'immagine o chiedi un testo per bambini...")
 
 if prompt:
-    st.session_state.chat_history.append({"role": "user", "content": prompt})
+    st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"):
         st.markdown(prompt)
 
     with st.chat_message("assistant"):
-        with st.spinner("RE-WIRE sta guardando e scrivendo per te..."):
+        with st.spinner("RE-WIRE sta elaborando (Gemini Vision)..."):
             try:
-                client = Groq(api_key=st.secrets["GROQ_API_KEY"])
+                # Scegliamo il modello Flash per velocità e visione
+                model = genai.GenerativeModel('gemini-1.5-flash')
                 
-                # Usiamo il modello Llama 3.2 Vision aggiornato
-                # Se il 90b dà ancora errore, il sistema proverà automaticamente l'11b
-                try:
-                    model_to_use = "llama-3.2-11b-vision-preview" 
-                    
-                    if st.session_state.temp_file_data["image_b64"]:
-                        content_payload = [
-                            {"type": "text", "text": prompt},
-                            {
-                                "type": "image_url",
-                                "image_url": {"url": f"data:image/jpeg;base64,{st.session_state.temp_file_data['image_b64']}"}
-                            }
-                        ]
-                    else:
-                        model_to_use = "llama-3.3-70b-versatile"
-                        content_payload = prompt
+                # Costruiamo la richiesta
+                request_parts = [prompt]
+                
+                # Aggiungiamo l'immagine se presente
+                if img_to_send:
+                    request_parts.append(img_to_send)
+                
+                # Aggiungiamo il contesto del PDF se presente
+                if st.session_state.doc_context:
+                    request_parts.append(f"\n\nContesto Documento: {st.session_state.doc_context[:10000]}")
 
-                    res = client.chat.completions.create(
-                        messages=[{"role": "user", "content": content_payload}],
-                        model=model_to_use
-                    )
-                    risposta = res.choices[0].message.content
-                except:
-                    # Fallback estremo se Groq cambia nomi ai modelli all'improvviso
-                    st.error("Il modello Vision è in manutenzione su Groq. Prova tra pochi minuti.")
-                    risposta = "Spiacente, sto aggiornando i miei occhi digitali. Riprova tra un istante!"
+                # Generazione risposta
+                response = model.generate_content(request_parts)
+                answer = response.text
                 
-                st.markdown(f'<div class="report-box">{risposta}</div>', unsafe_allow_html=True)
-                st.session_state.chat_history.append({"role": "assistant", "content": risposta})
+                st.markdown(f'<div class="report-box">{answer}</div>', unsafe_allow_html=True)
+                st.session_state.messages.append({"role": "assistant", "content": answer})
                 
             except Exception as e:
-                st.error(f"Errore di sistema: {e}")
+                st.error(f"Errore tecnico: {e}")
