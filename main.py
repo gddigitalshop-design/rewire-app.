@@ -7,7 +7,7 @@ from PyPDF2 import PdfReader
 # --- 1. CONFIGURAZIONE PAGINA ---
 st.set_page_config(page_title="RE-WIRE Business Brain", layout="wide", page_icon="📈")
 
-# --- 2. SISTEMA DI LOGIN (Per vendita/affitto) ---
+# --- 2. SISTEMA DI LOGIN ---
 def check_login():
     if "authenticated" not in st.session_state:
         st.session_state.authenticated = False
@@ -19,25 +19,24 @@ def check_login():
             user = st.text_input("Username")
             password = st.text_input("Password", type="password")
             if st.button("ACCEDI AL SISTEMA", use_container_width=True):
-                # Cambia queste credenziali prima della consegna al cliente
                 if user == "admin" and password == "rewire2025":
                     st.session_state.authenticated = True
                     st.rerun()
                 else:
-                    st.error("Credenziali non valide. Riprova.")
+                    st.error("Credenziali non valide.")
         return False
     return True
 
-# --- ESECUZIONE APP SE LOGGATO ---
+# --- ESECUZIONE APP ---
 if check_login():
     
-    # Inizializzazione Session State (Autosave)
+    # Inizializzazione Session State
     if "current_template" not in st.session_state:
         st.session_state.current_template = None
     if "last_prompt" not in st.session_state:
         st.session_state.last_prompt = ""
 
-    # --- 3. FUNZIONE ESPORTAZIONE PDF ---
+    # Funzione PDF
     def crea_pdf_output(testo):
         pdf = FPDF()
         pdf.add_page()
@@ -45,32 +44,22 @@ if check_login():
         pdf.cell(0, 10, txt="RE-WIRE BUSINESS REPORT", ln=True, align='C')
         pdf.ln(10)
         pdf.set_font("helvetica", size=11)
-        # Pulizia caratteri non compatibili
         testo_safe = testo.encode('latin-1', 'ignore').decode('latin-1')
         pdf.multi_cell(0, 8, txt=testo_safe)
         return pdf.output()
 
-    # --- 4. BARRA LATERALE (PANNELLO DI CONTROLLO) ---
+    # --- 3. BARRA LATERALE ---
     with st.sidebar:
         st.title("⚙️ RE-WIRE Hub")
-        st.write(f"Stato: **Connesso** [2025-12-30]")
+        st.write("Stato: **Connesso**")
         
-        st.subheader("📋 Modelli Strategici")
         tipo_lavoro = st.selectbox(
-            "Scegli un'attività:",
-            [
-                "Analisi Libera", 
-                "Business Plan Executive (Riunioni)", 
-                "Analisi SWOT Professionale", 
-                "Piano Marketing Strategico",
-                "Analisi dei Rischi Aziendali"
-            ]
+            "Modelli Strategici:",
+            ["Analisi Libera", "Business Plan Executive (Riunioni)", "Analisi SWOT", "Piano Marketing"]
         )
         
         st.divider()
-        
-        st.subheader("📁 Documenti Fonte")
-        uploaded_file = st.file_uploader("Carica PDF o TXT dal PC", type=["txt", "pdf"])
+        uploaded_file = st.file_uploader("Carica PDF o TXT", type=["txt", "pdf"])
         
         contenuto_file = ""
         if uploaded_file:
@@ -81,20 +70,57 @@ if check_login():
                         contenuto_file += page.extract_text() + "\n"
                 else:
                     contenuto_file = uploaded_file.getvalue().decode("utf-8")
-                st.success(f"✅ {uploaded_file.name} analizzato")
+                st.success("File caricato")
             except:
-                st.error("Errore lettura file")
+                st.error("Errore file")
 
         st.divider()
 
-        # ESPORTAZIONE (Appare solo se c'è un risultato)
         if st.session_state.current_template:
-            st.subheader("💾 Esporta Analisi")
-            st.download_button("📄 SCARICA TXT", st.session_state.current_template, "strategia_rewire.txt", use_container_width=True)
+            st.download_button("📄 TXT", st.session_state.current_template, "report.txt", use_container_width=True)
             try:
                 pdf_data = crea_pdf_output(st.session_state.current_template)
-                st.download_button("📕 SCARICA PDF", bytes(pdf_data), "report_rewire.pdf", "application/pdf", use_container_width=True)
+                st.download_button("📕 PDF", bytes(pdf_data), "report.pdf", "application/pdf", use_container_width=True)
             except:
-                st.error("Errore creazione PDF")
+                st.error("Errore PDF")
 
+        # FIX INDENTAZIONE QUI
         if st.button("🗑️ RESET SESSIONE", use_container_width=True):
+            st.session_state.current_template = None
+            st.session_state.last_prompt = ""
+            st.rerun()
+            
+        if st.button("🚪 LOGOUT", use_container_width=True):
+            st.session_state.authenticated = False
+            st.rerun()
+
+    # --- 4. AREA CENTRALE ---
+    st.title("📈 RE-WIRE Business Brain")
+    
+    c_prompt = st.text_area("Descrizione o Istruzioni:", value=st.session_state.last_prompt, height=150)
+
+    if st.button("🚀 AVVIA ELABORAZIONE", use_container_width=True):
+        if c_prompt or contenuto_file:
+            with st.spinner("Analisi in corso..."):
+                try:
+                    client = Groq(api_key=st.secrets["GROQ_API_KEY"])
+                    context = f"Tipo: {tipo_lavoro}\nFile: {contenuto_file[:10000]}\nInput: {c_prompt}"
+                    res = client.chat.completions.create(
+                        messages=[{"role": "user", "content": context}],
+                        model="llama-3.3-70b-versatile"
+                    )
+                    st.session_state.current_template = res.choices[0].message.content
+                    st.session_state.last_prompt = c_prompt
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Errore: {e}")
+
+    if st.session_state.current_template:
+        st.markdown(
+            f"""
+            <div style="background-color: #1E1E1E; color: #FFFFFF; padding: 25px; border-radius: 12px; border: 1px solid #444444; white-space: pre-wrap; max-height: 500px; overflow-y: auto;">
+            {st.session_state.current_template}
+            </div>
+            """, 
+            unsafe_allow_html=True
+        )
