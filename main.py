@@ -2,84 +2,107 @@ import streamlit as st
 from groq import Groq
 import PyPDF2
 
-# --- 1. CONFIGURAZIONE PAGINA ---
+# --- 1. CONFIGURAZIONE ESTETICA ---
 st.set_page_config(page_title="RE-WIRE Business Brain", page_icon="🤝", layout="centered")
 
-# --- 2. DATABASE UTENTI ---
+# CSS Personalizzato per un look Premium
+st.markdown("""
+    <style>
+    .stApp { background-color: #0B0E11; color: #E9ECEF; }
+    .stButton>button { border-radius: 10px; height: 3em; background-color: #007BFF; color: white; border: none; }
+    .stChatMessage { background-color: #161B22; border-radius: 15px; border: 1px solid #30363D; }
+    </style>
+    """, unsafe_allow_html=True)
+
+# --- 2. DATABASE UTENTI (Qui aggiungerai i tuoi clienti) ---
 USERS = {
     "admin": "tuapassword123",
     "cliente1": "rewire2025"
 }
 
-# --- 3. LOGICA DI ACCESSO AUTOMATICO (URL PARAMS) ---
+# --- 3. GESTIONE ACCESSO ---
 if "logged_in" not in st.session_state:
     st.session_state.logged_in = False
     st.session_state.user_role = None
+    st.session_state.messages = []
 
-# Controlla se ci sono credenziali nel link (URL)
-query_params = st.query_params
-url_user = query_params.get("user")
-url_pass = query_params.get("pass")
+# Controllo link magico (per la comodità del cliente)
+q = st.query_params
+if not st.session_state.logged_in and q.get("user") in USERS and USERS[q.get("user")] == q.get("pass"):
+    st.session_state.logged_in = True
+    st.session_state.user_role = q.get("user")
+
+def login_page():
+    st.markdown('<p style="font-size:3rem; font-weight:800; color:#007BFF; text-align:center; margin-bottom:0;">RE-WIRE</p>', unsafe_allow_html=True)
+    st.markdown('<p style="text-align:center; color:#8B949E; margin-bottom:2rem;">Business Intelligence & Strategic Partner</p>', unsafe_allow_html=True)
+    
+    with st.container():
+        u = st.text_input("Username")
+        p = st.text_input("Password", type="password")
+        if st.button("Entra nel Brain", use_container_width=True):
+            if u in USERS and USERS[u] == p:
+                st.session_state.logged_in = True
+                st.session_state.user_role = u
+                st.rerun()
+            else:
+                st.error("Credenziali non valide")
 
 if not st.session_state.logged_in:
-    if url_user in USERS and USERS[url_user] == url_pass:
-        st.session_state.logged_in = True
-        st.session_state.user_role = url_user
-        st.session_state.messages = [{"role": "system", "content": "Accesso rapido eseguito."}]
-
-def login_screen():
-    st.markdown('<p style="font-size:2.5rem; font-weight:800; color:#007BFF; text-align:center;">RE-WIRE</p>', unsafe_allow_html=True)
-    user = st.text_input("Username")
-    password = st.text_input("Password", type="password")
-    if st.button("Accedi al Brain", use_container_width=True):
-        if user in USERS and USERS[user] == password:
-            st.session_state.logged_in = True
-            st.session_state.user_role = user
-            st.session_state.messages = [{"role": "system", "content": "Sei RE-WIRE, partner di pensiero."}]
-            st.rerun()
-        else:
-            st.error("Credenziali errate.")
-
-# --- 4. CONTROLLO ACCESSO ---
-if not st.session_state.logged_in:
-    login_screen()
+    login_page()
     st.stop()
 
-# --- 5. LOGOUT E UI ---
+# --- 4. LOGICA DOWNLOAD REPORT (La "Memoria" per il cliente) ---
+def genera_report():
+    testo = f"REPORT DI CONSULENZA RE-WIRE\nUtente: {st.session_state.user_role}\n------------------------------\n\n"
+    for m in st.session_state.messages:
+        ruolo = "IO" if m["role"] == "user" else "RE-WIRE"
+        testo += f"{ruolo}: {m['content']}\n\n"
+    return testo
+
+# --- 5. INTERFACCIA PRINCIPALE ---
 with st.sidebar:
-    st.write(f"Connesso come: **{st.session_state.user_role}**")
-    if st.button("Logout"):
+    st.markdown(f"### Benvenuto, **{st.session_state.user_role}**")
+    
+    # TASTO DOWNLOAD (Appare solo se c'è una chat)
+    if len(st.session_state.messages) > 0:
+        st.download_button(
+            label="📄 Scarica Report Consulenza",
+            data=genera_report(),
+            file_name=f"consulenza_rewire_{st.session_state.user_role}.txt",
+            mime="text/plain",
+            use_container_width=True
+        )
+    
+    if st.button("Chiudi Sessione (Logout)", use_container_width=True):
         st.session_state.logged_in = False
-        # Pulisce i parametri dall'URL al logout
         st.query_params.clear()
         st.rerun()
+
     st.divider()
-    uploaded_file = st.file_uploader("Carica PDF", type="pdf")
-    if uploaded_file:
-        reader = PyPDF2.PdfReader(uploaded_file)
-        pdf_text = "".join([page.extract_text() for page in reader.pages])
-        st.session_state.messages.append({"role": "system", "content": f"PDF: {pdf_text[:4000]}"})
-        st.success("Documento pronto!")
+    st.markdown("### 📂 Analisi Documenti")
+    file = st.file_uploader("Carica bilanci o PDF aziendali", type="pdf")
+    if file:
+        reader = PyPDF2.PdfReader(file)
+        testo_pdf = "".join([p.extract_text() for p in reader.pages])
+        st.session_state.messages.append({"role": "system", "content": f"DOCUMENTO CARICATO: {testo_pdf[:4000]}"})
+        st.success("Analisi completata!")
 
-# --- 6. CORE CHAT (GROQ) ---
-api_key = st.secrets.get("GROQ_API_KEY", "").strip()
-client = Groq(api_key=api_key)
+# --- 6. CHAT CORE ---
+client = Groq(api_key=st.secrets["GROQ_API_KEY"])
 
-# Visualizzazione messaggi
-for message in st.session_state.messages:
-    if message["role"] != "system":
-        with st.chat_message(message["role"]):
-            st.markdown(message["content"])
+for m in st.session_state.messages:
+    if m["role"] != "system":
+        with st.chat_message(m["role"]): st.markdown(m["content"])
 
-if prompt := st.chat_input("Chiedimi quello che vuoi..."):
+if prompt := st.chat_input("Di cosa vogliamo discutere oggi?"):
     st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"): st.markdown(prompt)
     
     with st.chat_message("assistant"):
-        chat_completion = client.chat.completions.create(
+        compl = client.chat.completions.create(
             messages=st.session_state.messages,
             model="llama-3.3-70b-versatile"
         )
-        response = chat_completion.choices[0].message.content
-        st.markdown(response)
-        st.session_state.messages.append({"role": "assistant", "content": response})
+        resp = compl.choices[0].message.content
+        st.markdown(resp)
+        st.session_state.messages.append({"role": "assistant", "content": resp})
