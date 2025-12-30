@@ -1,21 +1,23 @@
 import streamlit as st
-import google.generativeai as genai
+import requests
+import base64
 from PIL import Image
 import fitz
 import io
 
-# --- 1. CONFIGURAZIONE ---
-GEMINI_API_KEY = "AIzaSyA8UTodWbYVU3Kzvc4Cg2brAoPinj5ciZc"
-genai.configure(api_key=GEMINI_API_KEY)
+# --- 1. CONFIGURAZIONE DIRETTA ---
+API_KEY = "AIzaSyA8UTodWbYVU3Kzvc4Cg2brAoPinj5ciZc"
+# URL della versione STABILE v1 (evitiamo la v1beta che dà errore)
+API_URL = f"https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key={API_KEY}"
 
-st.set_page_config(page_title="RE-WIRE AI Business", layout="wide", page_icon="🧠")
+st.set_page_config(page_title="RE-WIRE Business Vision", layout="wide", page_icon="🧠")
 
 # --- 2. LOGIN (Password: rewire2026) ---
 if "auth" not in st.session_state: st.session_state.auth = False
 if not st.session_state.auth:
     st.title("🔐 Accesso Licenza RE-WIRE")
-    pwd = st.text_input("Inserisci Password Licenza", type="password")
-    if st.button("SBLOCCA SISTEMA"):
+    pwd = st.text_input("Inserisci Password", type="password")
+    if st.button("SBLOCCA"):
         if pwd == "rewire2026":
             st.session_state.auth = True
             st.rerun()
@@ -25,14 +27,18 @@ if not st.session_state.auth:
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
-def process_file(uploaded_file):
+def process_file_to_base64(uploaded_file):
     if uploaded_file.type == "application/pdf":
         doc = fitz.open(stream=uploaded_file.read(), filetype="pdf")
         page = doc.load_page(0)
         pix = page.get_pixmap()
-        return Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
+        img = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
     else:
-        return Image.open(uploaded_file)
+        img = Image.open(uploaded_file)
+    
+    buffered = io.BytesIO()
+    img.save(buffered, format="JPEG")
+    return base64.b64encode(buffered.getvalue()).decode('utf-8'), img
 
 # --- 4. INTERFACCIA ---
 st.title("🧠 RE-WIRE Business Intelligence")
@@ -44,46 +50,47 @@ with st.sidebar:
         st.session_state.messages = []
         st.rerun()
 
-img_obj = None
+img_b64 = None
 if file:
-    try:
-        img_obj = process_file(file)
-        st.image(img_obj, width=400)
-    except Exception as e:
-        st.error(f"Errore file: {e}")
+    img_b64, img_display = process_file_to_base64(file)
+    st.image(img_display, width=400)
 
-# --- 5. CHAT ---
+# --- 5. CHAT CON CHIAMATA DIRETTA ---
 for msg in st.session_state.messages:
     with st.chat_message(msg["role"]):
         st.markdown(msg["content"])
 
-if prompt := st.chat_input("Fai una domanda sul documento..."):
+if prompt := st.chat_input("Fai una domanda..."):
     st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"):
         st.markdown(prompt)
 
     with st.chat_message("assistant"):
         with st.spinner("Analisi in corso..."):
+            # Costruiamo il pacchetto dati (JSON) da inviare a Google
+            payload = {
+                "contents": [{
+                    "parts": [{"text": prompt}]
+                }]
+            }
+            
+            if img_b64:
+                payload["contents"][0]["parts"].append({
+                    "inline_data": {
+                        "mime_type": "image/jpeg",
+                        "data": img_b64
+                    }
+                })
+
             try:
-                # FORZIAMO IL MODELLO ALL'INTERNO DELLA CHIAMATA
-                # Usiamo il nome corto senza 'models/' per evitare il 404
-                vision_model = genai.GenerativeModel('gemini-1.5-flash')
+                response = requests.post(API_URL, json=payload)
+                result = response.json()
                 
-                if img_obj:
-                    # Se c'è l'immagine, usiamo la lista [testo, immagine]
-                    response = vision_model.generate_content([prompt, img_obj])
+                if response.status_code == 200:
+                    answer = result['candidates'][0]['content']['parts'][0]['text']
+                    st.markdown(answer)
+                    st.session_state.messages.append({"role": "assistant", "content": answer})
                 else:
-                    response = vision_model.generate_content(prompt)
-                
-                st.markdown(response.text)
-                st.session_state.messages.append({"role": "assistant", "content": response.text})
+                    st.error(f"Errore API {response.status_code}: {result.get('error', {}).get('message', 'Errore ignoto')}")
             except Exception as e:
-                # SE FALLISCE, PROVIAMO IL MODELLO PRO (Backup estremo)
-                try:
-                    backup_model = genai.GenerativeModel('gemini-1.5-pro')
-                    response = backup_model.generate_content([prompt, img_obj] if img_obj else prompt)
-                    st.markdown(response.text)
-                    st.session_state.messages.append({"role": "assistant", "content": response.text})
-                except Exception as e2:
-                    st.error(f"Errore critico Google: {e2}")
-                    st.info("Nota per l'amministratore: Controlla che il piano 'Pay-as-you-go' sia attivo su Google AI Studio per abilitare i modelli Flash 1.5.")
+                st.error(f"Errore di connessione: {e}")
