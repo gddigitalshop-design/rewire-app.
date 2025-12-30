@@ -9,9 +9,9 @@ import fitz  # PyMuPDF
 GROQ_API_KEY = "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"
 client = Groq(api_key=GROQ_API_KEY)
 
-st.set_page_config(page_title="RE-WIRE Business Vision", layout="wide", page_icon="🧠")
+st.set_page_config(page_title="RE-WIRE AI Business", layout="wide", page_icon="🧠")
 
-# --- 2. LOGIN (Password: rewire2026) ---
+# --- 2. LOGIN ---
 if "auth" not in st.session_state: st.session_state.auth = False
 if not st.session_state.auth:
     st.title("🔐 Accesso RE-WIRE")
@@ -22,7 +22,7 @@ if not st.session_state.auth:
             st.rerun()
     st.stop()
 
-# --- 3. GESTIONE MEMORIA E FILE ---
+# --- 3. GESTIONE FILE E MEMORIA ---
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
@@ -50,8 +50,6 @@ with st.sidebar:
     if st.button("🗑️ Reset Chat"):
         st.session_state.messages = []
         st.rerun()
-    st.divider()
-    st.caption("Modelli attivi: Llama 3.2 Vision Instant")
 
 img_base64 = None
 if file:
@@ -71,14 +69,10 @@ if prompt := st.chat_input("Fai una domanda..."):
 
     with st.chat_message("assistant"):
         with st.spinner("Analisi in corso..."):
-            # LISTA AGGIORNATA 2026 (Senza Preview)
-            modelli_vision = [
-                "llama-3.2-11b-vision-instant",
-                "llama-3.2-90b-vision-instant",
-                "llama-3.1-8b-instant" # Solo testo se la visione fallisce
-            ]
+            # Modelli Vision 2026 (nomi corretti)
+            modelli_vision = ["llama-3.2-11b-vision-instant", "llama-3.2-90b-vision-instant"]
             
-            final_response = None
+            final_resp = None
             logs = ""
             
             for m in modelli_vision:
@@ -86,19 +80,16 @@ if prompt := st.chat_input("Fai una domanda..."):
                     content = [{"type": "text", "text": prompt}]
                     if img_base64:
                         content.append({"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{img_base64}"}})
-
-                    response = client.chat.completions.create(
-                        model=m,
-                        messages=[{"role": "user", "content": content}]
-                    )
-                    final_response = response.choices[0].message.content
+                    
+                    resp = client.chat.completions.create(model=m, messages=[{"role": "user", "content": content}])
+                    final_resp = resp.choices[0].message.content
                     break
                 except Exception as e:
-                    logs += f"\n- {m}: {str(e)}"
-                    continue
-
-            if final_response:
-                st.markdown(final_response)
-                st.session_state.messages.append({"role": "assistant", "content": final_response})
+                    logs += f"{m}: {str(e)}\n"
+            
+            if final_resp:
+                st.markdown(final_resp)
+                st.session_state.messages.append({"role": "assistant", "content": final_resp})
             else:
-                st.error("Errore: I modelli sono cambiati di
+                st.error("Errore critico nei modelli.")
+                st.info(f"Dettagli: {logs}")
