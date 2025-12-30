@@ -3,13 +3,12 @@ from groq import Groq
 import base64
 
 # --- CONFIGURAZIONE ---
-# Incolla qui la tua chiave Groq
 API_KEY_GROQ = "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"
 client = Groq(api_key=API_KEY_GROQ)
 
 st.set_page_config(page_title="RE-WIRE Business Vision", layout="wide")
 
-# --- LOGIN (Per vendere l'app) ---
+# --- LOGIN ---
 if "loggato" not in st.session_state:
     st.session_state.loggato = False
 
@@ -24,7 +23,7 @@ if not st.session_state.loggato:
             st.error("Password errata")
     st.stop()
 
-# --- APP DOPO IL LOGIN ---
+# --- APP ---
 st.title("🧠 RE-WIRE AI Vision")
 
 with st.sidebar:
@@ -40,12 +39,11 @@ if foto:
     
     if st.button("🚀 ANALIZZA"):
         try:
-            # Trasformiamo la foto per l'AI
             base64_foto = base64.b64encode(foto.getvalue()).decode('utf-8')
 
-            # Chiamata all'AI (Velocissima)
+            # CAMBIO MODELLO QUI: llama-3.2-11b-vision-instant
             risposta = client.chat.completions.create(
-                model="llama-3.2-11b-vision-preview",
+                model="llama-3.2-11b-vision-instant", 
                 messages=[{
                     "role": "user",
                     "content": [
@@ -57,3 +55,4 @@ if foto:
             st.success(risposta.choices[0].message.content)
         except Exception as e:
             st.error(f"Errore: {e}")
+            st.info("Se l'errore persiste, prova a usare il modello: llama-3.3-70b-versatile")
