@@ -1,4 +1,3 @@
-
 import streamlit as st
 from groq import Groq
 import PyPDF2
@@ -53,17 +52,11 @@ if not st.session_state.logged_in:
 
 # --- 3. FUNZIONI TECNICHE ---
 def genera_immagine(prompt_immagine):
-    import urllib.parse
-    import random
-    
-    # Generiamo un seed per la varietà
-    seed = random.randint(0, 99999)
+    # Generiamo un seed casuale per forzare il server a creare un'immagine nuova
+    seed = random.randint(0, 999999)
     prompt_f = urllib.parse.quote(prompt_immagine)
-    
-    # Usiamo un provider diverso (Hugging Face via Pollinations con bypass)
-    # Questa struttura URL è più difficile da bloccare per il server
+    # URL ottimizzato per evitare i blocchi dei limiti
     url = f"https://image.pollinations.ai/prompt/{prompt_f}?width=1024&height=1024&seed={seed}&model=flux&nologo=true"
-    
     return url
 
 # --- 4. SIDEBAR ---
@@ -74,19 +67,7 @@ with st.sidebar:
         st.session_state.logged_in = False
         st.rerun()
     
-    st.divider()def genera_immagine(prompt_immagine):
-    import urllib.parse
-    import random
-    
-    # Generiamo un seed per la varietà
-    seed = random.randint(0, 99999)
-    prompt_f = urllib.parse.quote(prompt_immagine)
-    
-    # Usiamo un provider diverso (Hugging Face via Pollinations con bypass)
-    # Questa struttura URL è più difficile da bloccare per il server
-    url = f"https://image.pollinations.ai/prompt/{prompt_f}?width=1024&height=1024&seed={seed}&model=flux&nologo=true"
-    
-    return url
+    st.divider()
     if st.button("🗑️ Svuota Tutto"):
         st.session_state.messages = []
         st.session_state.current_img = None
@@ -134,14 +115,14 @@ with col2:
 # --- AREA VISUALIZZAZIONE RISULTATI ---
 if st.session_state.current_img:
     st.image(st.session_state.current_img, caption=f"Risultato: {c_prompt}")
-    if st.button("❌ Chiudi Immagine"):
+    if st.button("❌ Rimuovi questa Immagine"):
         st.session_state.current_img = None
         st.rerun()
 
 if st.session_state.current_template:
     st.info("Template Generato:")
     st.markdown(st.session_state.current_template)
-    if st.button("❌ Chiudi Template"):
+    if st.button("❌ Rimuovi questo Template"):
         st.session_state.current_template = None
         st.rerun()
 
@@ -163,5 +144,3 @@ if p := st.chat_input("Chiedi un'analisi o una strategia..."):
         response = compl.choices[0].message.content
         st.markdown(response)
         st.session_state.messages.append({"role": "assistant", "content": response})
-
-
