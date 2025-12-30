@@ -78,7 +78,11 @@ with st.sidebar:
         testo_pdf = "".join([p.extract_text() for p in reader.pages])
         st.session_state.messages.append({"role": "system", "content": f"CONTESTO PDF: {testo_pdf[:4000]}"})
         st.success(f"File '{file.name}' analizzato!")
-
+st.divider()
+    if st.button("🗑️ Svuota Sessione", help="Cancella cronologia e immagini"):
+        st.session_state.messages = []
+        st.session_state.generated_image = None
+        st.rerun()
 # --- 5. AREA PRINCIPALE (Generatore e Chat) ---
 st.markdown(f"### Benvenuto, {st.session_state.user_role.capitalize()}")
 
@@ -134,5 +138,6 @@ if prompt := st.chat_input("Chiedi un'analisi o una strategia..."):
         response = compl.choices[0].message.content
         st.markdown(response)
         st.session_state.messages.append({"role": "assistant", "content": response})
+
 
 
