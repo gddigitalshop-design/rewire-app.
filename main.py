@@ -54,12 +54,42 @@ if not st.session_state.logged_in:
 # --- 3. FUNZIONI TECNICHE ---
 def genera_immagine(prompt_immagine):
     try:
+        import requests
+        import random
+        import base64
+
         api_key = "sk_ENpARXemZP1q6SuLX6Xc7fZW0BHOID6P_"
-        seed = random.randint(0, 9999999)
-        prompt_pulito = urllib.parse.quote(prompt_immagine)
-        # URL con SEED unico e AUTH per sbloccare i limiti
-        url = f"https://image.pollinations.ai/prompt/{prompt_pulito}?width=1024&height=1024&nologo=true&seed={seed}&model=flux&auth={api_key}"
-        return url
+        seed = random.randint(0, 999999)
+        
+        # Parametri della generazione
+        payload = {
+            "prompt": prompt_immagine,
+            "seed": seed,
+            "width": 1024,
+            "height": 1024,
+            "model": "flux",
+            "nologo": True
+        }
+        
+        # Inviamo la chiave API nell'intestazione (Header) come richiesto dai professionisti
+        headers = {
+            "Authorization": f"Bearer {api_key}"
+        }
+
+        # Chiamata diretta al server
+        response = requests.get(
+            f"https://image.pollinations.ai/prompt/{prompt_immagine}",
+            params=payload,
+            headers=headers
+        )
+
+        if response.status_code == 200:
+            # Trasformiamo l'immagine in un formato che Streamlit legge subito
+            return response.content
+        else:
+            st.error(f"Errore dal server: {response.status_code}")
+            return None
+            
     except Exception as e:
         st.error(f"Errore tecnico: {e}")
         return None
@@ -149,3 +179,4 @@ if p := st.chat_input("Chiedi un'analisi o una strategia..."):
         response = compl.choices[0].message.content
         st.markdown(response)
         st.session_state.messages.append({"role": "assistant", "content": response})
+
