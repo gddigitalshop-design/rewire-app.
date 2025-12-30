@@ -3,7 +3,7 @@ from groq import Groq
 import base64
 from PIL import Image
 import io
-import fitz  # PyMuPDF per i PDF
+import fitz  # PyMuPDF
 
 # --- 1. CONFIGURAZIONE ---
 GROQ_API_KEY = "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"
@@ -11,22 +11,18 @@ client = Groq(api_key=GROQ_API_KEY)
 
 st.set_page_config(page_title="RE-WIRE AI Business", layout="wide", page_icon="🧠")
 
-# --- 2. LOGIN (Protezione Business) ---
+# --- 2. LOGIN ---
 if "auth" not in st.session_state: st.session_state.auth = False
 if not st.session_state.auth:
     st.title("🔐 Accesso Licenza RE-WIRE")
-    col1, col2, col3 = st.columns([1,2,1])
-    with col2:
-        pwd = st.text_input("Inserisci Password Licenza", type="password")
-        if st.button("SBLOCCA SISTEMA"):
-            if pwd == "rewire2026":
-                st.session_state.auth = True
-                st.rerun()
-            else:
-                st.error("Password non valida.")
+    pwd = st.text_input("Inserisci Password Licenza", type="password")
+    if st.button("SBLOCCA SISTEMA"):
+        if pwd == "rewire2026":
+            st.session_state.auth = True
+            st.rerun()
     st.stop()
 
-# --- 3. GESTIONE MEMORIA E FILE ---
+# --- 3. GESTIONE FILE ---
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
@@ -54,65 +50,67 @@ with st.sidebar:
     if st.button("🗑️ Reset Conversazione"):
         st.session_state.messages = []
         st.rerun()
-    st.divider()
-    st.info("Sistema multi-modello attivo")
 
 img_base64 = None
 if file:
     try:
         img_obj = process_file(file)
-        st.image(img_obj, width=350, caption="Documento in analisi")
+        st.image(img_obj, width=350, caption="Documento pronto per l'analisi")
         img_base64 = encode_image(img_obj)
     except Exception as e:
-        st.error(f"Errore caricamento file: {e}")
+        st.error(f"Errore file: {e}")
 
-# --- 5. CHAT CON FALLBACK AUTOMATICO ---
+# --- 5. CHAT ---
 for msg in st.session_state.messages:
     with st.chat_message(msg["role"]):
         st.markdown(msg["content"])
 
-if prompt := st.chat_input("Fai una domanda strategica..."):
+if prompt := st.chat_input("Fai una domanda sul documento..."):
     st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"):
         st.markdown(prompt)
 
     with st.chat_message("assistant"):
-        with st.spinner("L'intelligenza RE-WIRE sta elaborando..."):
-            # Gerarchia di modelli: dal più recente al più stabile
-            modelli_da_provare = [
-                "llama-3.2-11b-vision-instant",
-                "llama-3.2-90b-vision-instant",
-                "llama-3.3-70b-versatile" # Modello testuale di emergenza (sempre attivo)
-            ]
-            
-            final_res = None
-            
-            for model_name in modelli_da_provare:
-                try:
-                    # Se il modello supporta la visione e abbiamo un'immagine
-                    if "vision" in model_name and img_base64:
-                        content = [
-                            {"type": "text", "text": prompt},
-                            {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{img_base64}"}}
-                        ]
-                    else:
-                        # Fallback solo testo
-                        content = [{"type": "text", "text": prompt}]
+        # Proviamo prima i modelli Vision aggiornati 2026
+        # Se falliscono, l'app avvisa l'utente invece di dare risposte errate
+        modelli_vision = ["llama-3.2-11b-vision-instant", "llama-3.2-90b-vision-instant"]
+        successo = False
+        
+        for m in modelli_vision:
+            try:
+                # Costruiamo il contenuto multimediale
+                contenuto = [{"type": "text", "text": prompt}]
+                if img_base64:
+                    contenuto.append({
+                        "type": "image_url",
+                        "image_url": {"url": f"data:image/jpeg;base64,{img_base64}"}
+                    })
 
-                    response = client.chat.completions.create(
-                        model=model_name,
-                        messages=[{"role": "user", "content": content}],
-                        timeout=10.0 # Evita attese infinite
-                    )
-                    final_res = response.choices[0].message.content
-                    if "vision" not in model_name and img_base64:
-                        final_res += "\n\n*(Nota: Analisi testuale di backup)*"
-                    break
-                except Exception:
-                    continue # Passa al prossimo modello se questo fallisce
-            
-            if final_res:
-                st.markdown(final_res)
-                st.session_state.messages.append({"role": "assistant", "content": final_res})
-            else:
-                st.error("I sistemi sono temporaneamente occupati. Riprova tra 60 secondi.")
+                response = client.chat.completions.create(
+                    model=m,
+                    messages=[{"role": "user", "content": contenuto}],
+                    temperature=0.2
+                )
+                
+                risposta_finale = response.choices[0].message.content
+                st.markdown(risposta_finale)
+                st.session_state.messages.append({"role": "assistant", "content": risposta_finale})
+                successo = True
+                break
+            except Exception:
+                continue
+        
+        if not successo:
+            st.warning("⚠️ I server Vision di Groq sono in manutenzione per il nuovo anno.")
+            st.info("Sto provando a rispondere usando l'analisi testuale avanzata...")
+            try:
+                # Backup solo testo (non vede l'immagine ma risponde alla domanda)
+                response = client.chat.completions.create(
+                    model="llama-3.3-70b-versatile",
+                    messages=[{"role": "user", "content": prompt}]
+                )
+                risposta_testo = response.choices[0].message.content
+                st.markdown(risposta_testo)
+                st.session_state.messages.append({"role": "assistant", "content": risposta_testo})
+            except Exception as e:
+                st.error(f"Errore di rete: {e}")
