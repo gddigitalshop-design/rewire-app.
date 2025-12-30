@@ -5,105 +5,134 @@ import urllib.parse
 import requests
 import io
 from PIL import Image
+from fpdf import FPDF # Assicurati di aggiungere 'fpdf2' nel file requirements.txt
 
 # --- 1. CONFIGURAZIONE ---
-st.set_page_config(page_title="RE-WIRE Business", layout="wide")
+st.set_page_config(page_title="RE-WIRE Business Brain", layout="wide")
 
-if "logged_in" not in st.session_state:
-    st.session_state.logged_in = False
 if "current_img_data" not in st.session_state:
     st.session_state.current_img_data = None
 if "current_template" not in st.session_state:
     st.session_state.current_template = None
 
-# --- 2. LOGIN (Browser autofill enabled) ---
-USERS = {"admin": "tuapassword123", "cliente1": "rewire2025"}
+# --- 2. FUNZIONI TECNICHE ---
+def genera_immagine(prompt):
+    seed = random.randint(1, 1000000)
+    url = f"https://image.pollinations.ai/prompt/{urllib.parse.quote(prompt)}?width=1024&height=1024&seed={seed}&nologo=true&model=flux"
+    try:
+        r = requests.get(url, timeout=20)
+        # Verifica se è un'immagine reale
+        img = Image.open(io.BytesIO(r.content))
+        return r.content
+    except:
+        return None
 
-def login_system():
-    st.markdown("<h1 style='text-align:center;color:#007BFF;'>RE-WIRE PLATFORM</h1>", unsafe_allow_html=True)
-    col1, col2, col3 = st.columns([1, 2, 1])
-    with col2:
-        u = st.text_input("Username", key="login_user")
-        p = st.text_input("Password", type="password", key="login_pass")
-        if st.button("ACCEDI", use_container_width=True):
-            if u in USERS and USERS[u] == p:
-                st.session_state.logged_in = True
-                st.session_state.user_role = u
-                st.rerun()
-            else:
-                st.error("Credenziali errate.")
+def crea_pdf(testo, immagine_data=None):
+    pdf = FPDF()
+    pdf.add_page()
+    pdf.set_font("Arial", "B", 16)
+    pdf.cell(200, 10, txt="RE-WIRE Business Report", ln=True, align='C')
+    pdf.ln(10)
+    
+    # Testo del Template
+    pdf.set_font("Arial", size=12)
+    pdf.multi_cell(0, 10, txt=testo)
+    
+    if immagine_data:
+        pdf.ln(10)
+        img_bin = io.BytesIO(immagine_data)
+        pdf.image(img_bin, x=10, w=100)
+        
+    return pdf.output(dest='S').encode('latin-1')
 
-if not st.session_state.logged_in:
-    login_system()
-    st.stop()
+# --- 3. INTERFACCIA PRINCIPALE ---
+st.title("📈 RE-WIRE Business Brain")
+st.markdown("Genera strategie, template e immagini per il tuo business in un click.")
 
-# --- 3. SIDEBAR FISSA ---
 with st.sidebar:
-    st.title("⚙️ Pannello")
-    st.write(f"Utente: **{st.session_state.get('user_role')}**")
-    st.divider()
-    if st.button("🗑️ CANCELLA TUTTO", use_container_width=True):
+    st.header("Comandi Rapidi")
+    if st.button("🗑️ Svuota Tutto", use_container_width=True):
         st.session_state.current_img_data = None
         st.session_state.current_template = None
         st.rerun()
-    if st.button("🚪 LOGOUT", use_container_width=True):
-        st.session_state.logged_in = False
-        st.rerun()
 
-# --- 4. CORE GENERAZIONE ---
-st.header("🚀 Business Hub")
-c_prompt = st.text_input("Cosa vuoi creare oggi?")
+# --- 4. INPUT E GENERAZIONE ---
+c_prompt = st.text_input("Descrivi la tua idea o il tuo progetto:")
 
 col1, col2 = st.columns(2)
 
 with col1:
-    if st.button("🖼️ GENERA IMMAGINE HD", use_container_width=True):
+    if st.button("🖼️ Genera Immagine HD", use_container_width=True):
         if c_prompt:
-            with st.spinner("L'AI sta disegnando..."):
-                seed = random.randint(1, 1000000)
-                url = f"https://image.pollinations.ai/prompt/{urllib.parse.quote(c_prompt)}?width=1024&height=1024&seed={seed}&nologo=true&model=flux"
-                try:
-                    r = requests.get(url, timeout=20)
-                    if r.status_code == 200:
-                        # VALIDAZIONE: Cerchiamo di aprire l'immagine prima di salvarla
-                        img_temp = Image.open(io.BytesIO(r.content))
-                        img_temp.verify() # Se è HTML/Errore, qui scatta l'eccezione
-                        st.session_state.current_img_data = r.content
-                        st.success("Immagine generata con successo!")
-                    else:
-                        st.error("Il server AI non risponde correttamente.")
-                except Exception:
-                    st.error("⚠️ Errore: Il server è in Rate Limit (troppe richieste). Riprova tra 30 secondi.")
+            with st.spinner("Creazione immagine..."):
+                res = genera_immagine(c_prompt)
+                if res:
+                    st.session_state.current_img_data = res
+                else:
+                    st.error("Server temporaneamente occupato. Riprova.")
         else:
-            st.warning("Inserisci una descrizione!")
+            st.warning("Inserisci una descrizione.")
 
 with col2:
-    if st.button("📝 CREA TEMPLATE", use_container_width=True):
+    if st.button("📝 Crea Template & Strategia", use_container_width=True):
         if c_prompt:
-            with st.spinner("Scrittura..."):
+            with st.spinner("Scrittura strategia..."):
                 try:
                     client = Groq(api_key=st.secrets["GROQ_API_KEY"])
                     res = client.chat.completions.create(
-                        messages=[{"role": "user", "content": f"Crea un template per: {c_prompt}"}],
+                        messages=[{"role": "user", "content": f"Crea un report business e un template per: {c_prompt}"}],
                         model="llama-3.3-70b-versatile"
                     )
                     st.session_state.current_template = res.choices[0].message.content
                 except:
-                    st.error("Errore Groq API.")
+                    st.error("Errore API Groq.")
 
-# --- 5. DISPLAY RISULTATI ---
+# --- 5. VISUALIZZAZIONE E DOWNLOAD ---
 st.divider()
 
-# Mostra l'immagine solo se i dati sono validi
-if st.session_state.current_img_data:
-    try:
-        st.image(st.session_state.current_img_data, use_container_width=True)
-        st.download_button("💾 SCARICA IMMAGINE", st.session_state.current_img_data, "creazione.png", "image/png")
-    except Exception:
-        st.session_state.current_img_data = None # Pulisce lo stato se i dati sono corrotti
-        st.error("Immagine corrotta ricevuta dal server. Riprova la generazione.")
+if st.session_state.current_template or st.session_state.current_img_data:
+    c1, c2 = st.columns([2, 1])
+    
+    with c1:
+        if st.session_state.current_template:
+            st.subheader("📝 Strategia e Template")
+            st.info(st.session_state.current_template)
+            
+        if st.session_state.current_img_data:
+            st.subheader("🖼️ Concept Visuale")
+            st.image(st.session_state.current_img_data, use_container_width=True)
 
-if st.session_state.current_template:
-    st.info("Template Generato:")
-    st.markdown(st.session_state.current_template)
-    st.download_button("💾 SCARICA TESTO", st.session_state.current_template, "template.txt")
+    with c2:
+        st.subheader("💾 Esportazione")
+        
+        # Download Immagine
+        if st.session_state.current_img_data:
+            st.download_button(
+                "📥 Scarica Immagine (PNG)",
+                st.session_state.current_img_data,
+                "creazione_rewire.png",
+                "image/png",
+                use_container_width=True
+            )
+        
+        # Download Template (Testo)
+        if st.session_state.current_template:
+            st.download_button(
+                "📥 Scarica Template (TXT)",
+                st.session_state.current_template,
+                "template_rewire.txt",
+                use_container_width=True
+            )
+            
+            # Esportazione PDF (Bonus)
+            try:
+                pdf_bytes = crea_pdf(st.session_state.current_template, st.session_state.current_img_data)
+                st.download_button(
+                    "📄 Scarica Report Completo (PDF)",
+                    pdf_bytes,
+                    "report_rewire.pdf",
+                    "application/pdf",
+                    use_container_width=True
+                )
+            except:
+                st.write("PDF in preparazione...")
