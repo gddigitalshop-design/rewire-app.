@@ -87,14 +87,15 @@ with st.expander("✨ GENERATORE DI IMMAGINI E TEMPLATE", expanded=True):
     creative_input = st.text_input("Cosa vuoi creare oggi?")
     col_img, col_temp = st.columns(2)
     
-    if st.button("🖼️ Genera Immagine"):
-    if creative_input:
-        with st.spinner("Creazione immagine..."):
-            img_url = genera_immagine(creative_input)
-            # QUESTA RIGA MOSTRA L'IMMAGINE NELL'APP
-            st.image(img_url, caption=f"Risultato per: {creative_input}") 
-            # Questa riga salva il link nella chat
-            st.session_state.messages.append({"role": "assistant", "content": f"Ho generato un'immagine per '{creative_input}': [Link Immagine]({img_url})"})
+    with col_img:
+        if st.button("🖼️ Genera Immagine"):
+            if creative_input:  # <-- Questa riga deve avere uno spazio extra a sinistra rispetto a 'if st.button'
+                with st.spinner("Creazione immagine..."):
+                    img_url = genera_immagine(creative_input)
+                    st.image(img_url, caption=f"Risultato per: {creative_input}")
+                    st.session_state.messages.append({"role": "assistant", "content": f"Immagine: {img_url}"})
+            else:
+                st.warning("Scrivi qualcosa prima!")
 
     with col_temp:
         if st.button("📝 Crea Template"):
@@ -133,4 +134,5 @@ if prompt := st.chat_input("Chiedi un'analisi o una strategia..."):
         response = compl.choices[0].message.content
         st.markdown(response)
         st.session_state.messages.append({"role": "assistant", "content": response})
+
 
