@@ -5,11 +5,12 @@ import urllib.parse
 import requests
 import io
 from PIL import Image
-from fpdf import FPDF # Assicurati di aggiungere 'fpdf2' nel file requirements.txt
+from fpdf import FPDF 
 
 # --- 1. CONFIGURAZIONE ---
 st.set_page_config(page_title="RE-WIRE Business Brain", layout="wide")
 
+# Inizializzazione sessione
 if "current_img_data" not in st.session_state:
     st.session_state.current_img_data = None
 if "current_template" not in st.session_state:
@@ -18,10 +19,10 @@ if "current_template" not in st.session_state:
 # --- 2. FUNZIONI TECNICHE ---
 def genera_immagine(prompt):
     seed = random.randint(1, 1000000)
-    url = f"https://image.pollinations.ai/prompt/{urllib.parse.quote(prompt)}?width=1024&height=1024&seed={seed}&nologo=true&model=flux"
+    # Usiamo un parametro casuale per il modello per tentare di aggirare il rate limit
+    url = f"https://image.pollinations.ai/prompt/{urllib.parse.quote(prompt)}?width=1024&height=1024&seed={seed}&nologo=true"
     try:
         r = requests.get(url, timeout=20)
-        # Verifica se è un'immagine reale
         img = Image.open(io.BytesIO(r.content))
         return r.content
     except:
@@ -30,34 +31,42 @@ def genera_immagine(prompt):
 def crea_pdf(testo, immagine_data=None):
     pdf = FPDF()
     pdf.add_page()
+    
+    # Titolo
     pdf.set_font("Arial", "B", 16)
-    pdf.cell(200, 10, txt="RE-WIRE Business Report", ln=True, align='C')
+    pdf.cell(0, 10, txt="RE-WIRE Business Report", ln=True, align='C')
     pdf.ln(10)
     
-    # Testo del Template
+    # Testo Strategia (Gestione caratteri speciali)
     pdf.set_font("Arial", size=12)
-    pdf.multi_cell(0, 10, txt=testo)
+    # Pulizia testo per evitare errori di codifica latin-1 nel PDF
+    testo_pulito = testo.encode('latin-1', 'ignore').decode('latin-1')
+    pdf.multi_cell(0, 10, txt=testo_pulito)
     
+    # Immagine (se presente)
     if immagine_data:
-        pdf.ln(10)
-        img_bin = io.BytesIO(immagine_data)
-        pdf.image(img_bin, x=10, w=100)
-        
-    return pdf.output(dest='S').encode('latin-1')
+        try:
+            pdf.ln(10)
+            img_bin = io.BytesIO(immagine_data)
+            # Salvataggio temporaneo per FPDF
+            pdf.image(img_bin, x=10, w=180)
+        except:
+            pass
+            
+    return pdf.output()
 
-# --- 3. INTERFACCIA PRINCIPALE ---
+# --- 3. INTERFACCIA ---
 st.title("📈 RE-WIRE Business Brain")
-st.markdown("Genera strategie, template e immagini per il tuo business in un click.")
+st.markdown("Generatore di strategie e concept visuali - **Versione Libera**")
 
 with st.sidebar:
-    st.header("Comandi Rapidi")
+    st.header("Comandi")
     if st.button("🗑️ Svuota Tutto", use_container_width=True):
         st.session_state.current_img_data = None
         st.session_state.current_template = None
         st.rerun()
 
-# --- 4. INPUT E GENERAZIONE ---
-c_prompt = st.text_input("Descrivi la tua idea o il tuo progetto:")
+c_prompt = st.text_input("Descrivi il tuo progetto business:")
 
 col1, col2 = st.columns(2)
 
@@ -68,71 +77,58 @@ with col1:
                 res = genera_immagine(c_prompt)
                 if res:
                     st.session_state.current_img_data = res
+                    st.success("Immagine creata!")
                 else:
-                    st.error("Server temporaneamente occupato. Riprova.")
+                    st.error("Server occupato (Rate Limit). Riprova tra poco.")
         else:
             st.warning("Inserisci una descrizione.")
 
 with col2:
-    if st.button("📝 Crea Template & Strategia", use_container_width=True):
+    if st.button("📝 Crea Strategia", use_container_width=True):
         if c_prompt:
-            with st.spinner("Scrittura strategia..."):
+            with st.spinner("Scrittura..."):
                 try:
                     client = Groq(api_key=st.secrets["GROQ_API_KEY"])
                     res = client.chat.completions.create(
-                        messages=[{"role": "user", "content": f"Crea un report business e un template per: {c_prompt}"}],
+                        messages=[{"role": "user", "content": f"Crea una strategia business e un template operativo per: {c_prompt}"}],
                         model="llama-3.3-70b-versatile"
                     )
                     st.session_state.current_template = res.choices[0].message.content
                 except:
-                    st.error("Errore API Groq.")
+                    st.error("Errore Groq. Controlla la tua API Key.")
 
-# --- 5. VISUALIZZAZIONE E DOWNLOAD ---
+# --- 4. VISUALIZZAZIONE E DOWNLOAD ---
 st.divider()
 
 if st.session_state.current_template or st.session_state.current_img_data:
-    c1, c2 = st.columns([2, 1])
+    v_col, d_col = st.columns([3, 1])
     
-    with c1:
+    with v_col:
         if st.session_state.current_template:
-            st.subheader("📝 Strategia e Template")
-            st.info(st.session_state.current_template)
-            
+            st.info("### Strategia Generata")
+            st.markdown(st.session_state.current_template)
+        
         if st.session_state.current_img_data:
-            st.subheader("🖼️ Concept Visuale")
-            st.image(st.session_state.current_img_data, use_container_width=True)
+            st.image(st.session_state.current_img_data, caption="Concept Visuale", use_container_width=True)
 
-    with c2:
-        st.subheader("💾 Esportazione")
+    with d_col:
+        st.subheader("💾 Download")
         
-        # Download Immagine
         if st.session_state.current_img_data:
-            st.download_button(
-                "📥 Scarica Immagine (PNG)",
-                st.session_state.current_img_data,
-                "creazione_rewire.png",
-                "image/png",
-                use_container_width=True
-            )
+            st.download_button("🖼️ Scarica Foto", st.session_state.current_img_data, "immagine.png", "image/png", use_container_width=True)
         
-        # Download Template (Testo)
         if st.session_state.current_template:
-            st.download_button(
-                "📥 Scarica Template (TXT)",
-                st.session_state.current_template,
-                "template_rewire.txt",
-                use_container_width=True
-            )
+            st.download_button("📄 Scarica Testo (TXT)", st.session_state.current_template, "strategia.txt", use_container_width=True)
             
-            # Esportazione PDF (Bonus)
+            # Generazione PDF al volo
             try:
-                pdf_bytes = crea_pdf(st.session_state.current_template, st.session_state.current_img_data)
+                pdf_output = crea_pdf(st.session_state.current_template, st.session_state.current_img_data)
                 st.download_button(
-                    "📄 Scarica Report Completo (PDF)",
-                    pdf_bytes,
-                    "report_rewire.pdf",
-                    "application/pdf",
+                    label="📕 Scarica Report PDF",
+                    data=bytes(pdf_output),
+                    file_name="report_rewire.pdf",
+                    mime="application/pdf",
                     use_container_width=True
                 )
-            except:
-                st.write("PDF in preparazione...")
+            except Exception as e:
+                st.write("Errore creazione PDF. Prova a scaricare il TXT.")
