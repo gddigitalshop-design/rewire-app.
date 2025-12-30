@@ -1,32 +1,41 @@
 import streamlit as st
-from groq import Groq
-import base64
+import google.generativeai as genai
 from PIL import Image
-import io
 import fitz  # PyMuPDF
+import io
 
-# --- 1. CONFIGURAZIONE ---
-GROQ_API_KEY = "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"
-client = Groq(api_key=GROQ_API_KEY)
+# --- 1. CONFIGURAZIONE GOOGLE GEMINI ---
+# La tua chiave API appena fornita
+GEMINI_API_KEY = "AIzaSyCxnOHGouptLrRn491MLvOJrDyqF8aMC9Y"
+genai.configure(api_key=GEMINI_API_KEY)
 
-st.set_page_config(page_title="RE-WIRE AI Business", layout="wide", page_icon="🧠")
+# Usiamo il modello Flash 1.5: ultra-veloce e perfetto per la visione
+model = genai.GenerativeModel('gemini-1.5-flash')
 
-# --- 2. LOGIN ---
+st.set_page_config(page_title="RE-WIRE Business Intelligence", layout="wide", page_icon="🧠")
+
+# --- 2. LOGIN DI PROTEZIONE ---
 if "auth" not in st.session_state: st.session_state.auth = False
+
 if not st.session_state.auth:
     st.title("🔐 Accesso Licenza RE-WIRE")
-    pwd = st.text_input("Inserisci Password Licenza", type="password")
-    if st.button("SBLOCCA SISTEMA"):
-        if pwd == "rewire2026":
-            st.session_state.auth = True
-            st.rerun()
+    col1, col2, col3 = st.columns([1,2,1])
+    with col2:
+        pwd = st.text_input("Inserisci Password", type="password")
+        if st.button("SBLOCCA SISTEMA"):
+            if pwd == "rewire2026":
+                st.session_state.auth = True
+                st.rerun()
+            else:
+                st.error("Accesso negato. Password errata.")
     st.stop()
 
-# --- 3. GESTIONE FILE ---
+# --- 3. GESTIONE MEMORIA E DOCUMENTI ---
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
 def process_file(uploaded_file):
+    """Gestisce sia Immagini che PDF (estraendo la prima pagina)"""
     if uploaded_file.type == "application/pdf":
         doc = fitz.open(stream=uploaded_file.read(), filetype="pdf")
         page = doc.load_page(0)
@@ -36,81 +45,52 @@ def process_file(uploaded_file):
     else:
         return Image.open(uploaded_file)
 
-def encode_image(image):
-    buffered = io.BytesIO()
-    image.save(buffered, format="JPEG")
-    return base64.b64encode(buffered.getvalue()).decode('utf-8')
-
-# --- 4. INTERFACCIA ---
+# --- 4. INTERFACCIA UTENTE ---
 st.title("🧠 RE-WIRE Business Intelligence")
+st.subheader("Analisi AI Avanzata - Immagini e PDF")
 
 with st.sidebar:
     st.header("📁 Hub Documenti")
-    file = st.file_uploader("Carica Foto o PDF", type=["jpg", "png", "jpeg", "pdf"])
-    if st.button("🗑️ Reset Conversazione"):
+    file = st.file_uploader("Carica una foto o un PDF", type=["jpg", "png", "jpeg", "pdf"])
+    if st.button("🗑️ Svuota Chat"):
         st.session_state.messages = []
         st.rerun()
+    st.divider()
+    st.caption("Motore: Google Gemini 1.5 Flash")
 
-img_base64 = None
+# Gestione del file caricato
+img_obj = None
 if file:
     try:
         img_obj = process_file(file)
-        st.image(img_obj, width=350, caption="Documento pronto per l'analisi")
-        img_base64 = encode_image(img_obj)
+        st.image(img_obj, width=400, caption="Documento caricato correttamente")
     except Exception as e:
-        st.error(f"Errore file: {e}")
+        st.error(f"Errore nel caricamento del file: {e}")
 
-# --- 5. CHAT ---
+# --- 5. CHAT INTERATTIVA ---
+# Visualizza lo storico della conversazione
 for msg in st.session_state.messages:
     with st.chat_message(msg["role"]):
         st.markdown(msg["content"])
 
+# Input dell'utente
 if prompt := st.chat_input("Fai una domanda sul documento..."):
     st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"):
         st.markdown(prompt)
 
     with st.chat_message("assistant"):
-        # Proviamo prima i modelli Vision aggiornati 2026
-        # Se falliscono, l'app avvisa l'utente invece di dare risposte errate
-        modelli_vision = ["llama-3.2-11b-vision-instant", "llama-3.2-90b-vision-instant"]
-        successo = False
-        
-        for m in modelli_vision:
+        with st.spinner("L'AI sta analizzando..."):
             try:
-                # Costruiamo il contenuto multimediale
-                contenuto = [{"type": "text", "text": prompt}]
-                if img_base64:
-                    contenuto.append({
-                        "type": "image_url",
-                        "image_url": {"url": f"data:image/jpeg;base64,{img_base64}"}
-                    })
-
-                response = client.chat.completions.create(
-                    model=m,
-                    messages=[{"role": "user", "content": contenuto}],
-                    temperature=0.2
-                )
+                # Gemini accetta una lista che può contenere sia testo che l'oggetto immagine direttamente
+                input_data = [prompt]
+                if img_obj:
+                    input_data.append(img_obj)
                 
-                risposta_finale = response.choices[0].message.content
-                st.markdown(risposta_finale)
-                st.session_state.messages.append({"role": "assistant", "content": risposta_finale})
-                successo = True
-                break
-            except Exception:
-                continue
-        
-        if not successo:
-            st.warning("⚠️ I server Vision di Groq sono in manutenzione per il nuovo anno.")
-            st.info("Sto provando a rispondere usando l'analisi testuale avanzata...")
-            try:
-                # Backup solo testo (non vede l'immagine ma risponde alla domanda)
-                response = client.chat.completions.create(
-                    model="llama-3.3-70b-versatile",
-                    messages=[{"role": "user", "content": prompt}]
-                )
-                risposta_testo = response.choices[0].message.content
+                response = model.generate_content(input_data)
+                risposta_testo = response.text
+                
                 st.markdown(risposta_testo)
                 st.session_state.messages.append({"role": "assistant", "content": risposta_testo})
             except Exception as e:
-                st.error(f"Errore di rete: {e}")
+                st.error(f"Errore tecnico con Gemini: {e}")
