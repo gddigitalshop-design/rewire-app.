@@ -5,27 +5,26 @@ from PIL import Image
 import fitz
 import io
 
-# --- 1. CONFIGURAZIONE ---
-# Usiamo Gemini 1.5 Flash con il percorso completo che risolve il 404
-API_KEY = "AIzaSyA8UTodWbYVU3Kzvc4Cg2brAoPinj5ciZc"
-MODEL_ID = "gemini-1.5-flash" 
-# URL forzato su v1 (Stabile)
-API_URL = f"https://generativelanguage.googleapis.com/v1/models/{MODEL_ID}:generateContent?key={API_KEY}"
+# --- 1. CONFIGURAZIONE GROQ (La tua chiave originale) ---
+GROQ_API_KEY = "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"
+# Usiamo Llama 3.2 11B Vision: il modello più stabile per le immagini
+MODEL_ID = "llama-3.2-11b-vision-preview"
+API_URL = "https://api.groq.com/openai/v1/chat/completions"
 
-st.set_page_config(page_title="RE-WIRE AI Business", layout="wide", page_icon="🧠")
+st.set_page_config(page_title="RE-WIRE Business Vision", layout="wide", page_icon="🧠")
 
-# --- 2. LOGIN ---
+# --- 2. LOGIN (Password: rewire2026) ---
 if "auth" not in st.session_state: st.session_state.auth = False
 if not st.session_state.auth:
     st.title("🔐 Accesso Licenza RE-WIRE")
-    pwd = st.text_input("Inserisci Password", type="password")
-    if st.button("ENTRA"):
+    pwd = st.text_input("Inserisci Password Licenza", type="password")
+    if st.button("SBLOCCA SISTEMA"):
         if pwd == "rewire2026":
             st.session_state.auth = True
             st.rerun()
     st.stop()
 
-# --- 3. FUNZIONI ---
+# --- 3. FUNZIONI TECNICHE ---
 def process_file_to_base64(uploaded_file):
     if uploaded_file.type == "application/pdf":
         doc = fitz.open(stream=uploaded_file.read(), filetype="pdf")
@@ -46,11 +45,13 @@ if "messages" not in st.session_state:
     st.session_state.messages = []
 
 with st.sidebar:
-    st.header("📁 Documenti")
+    st.header("📁 Hub Documenti")
     file = st.file_uploader("Carica Foto o PDF", type=["jpg", "png", "jpeg", "pdf"])
     if st.button("🗑️ Reset Chat"):
         st.session_state.messages = []
         st.rerun()
+    st.divider()
+    st.caption("Motore: Llama 3.2 Vision (Stabile)")
 
 img_b64 = None
 if file:
@@ -62,44 +63,42 @@ for msg in st.session_state.messages:
     with st.chat_message(msg["role"]):
         st.markdown(msg["content"])
 
-if prompt := st.chat_input("Fai una domanda..."):
+if prompt := st.chat_input("Fai una domanda sul documento..."):
     st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"):
         st.markdown(prompt)
 
     with st.chat_message("assistant"):
         with st.spinner("Analisi in corso..."):
-            # Struttura JSON corretta per Google v1 API
-            payload = {
-                "contents": [{
-                    "parts": [
-                        {"text": prompt}
-                    ]
-                }]
+            headers = {
+                "Authorization": f"Bearer {GROQ_API_KEY}",
+                "Content-Type": "application/json"
             }
             
+            # Struttura messaggi per Groq Vision
+            content = [{"type": "text", "text": prompt}]
             if img_b64:
-                payload["contents"][0]["parts"].append({
-                    "inline_data": {
-                        "mime_type": "image/jpeg",
-                        "data": img_b64
-                    }
+                content.append({
+                    "type": "image_url",
+                    "image_url": {"url": f"data:image/jpeg;base64,{img_b64}"}
                 })
 
+            payload = {
+                "model": MODEL_ID,
+                "messages": [{"role": "user", "content": content}],
+                "temperature": 0.1
+            }
+
             try:
-                response = requests.post(API_URL, json=payload, headers={'Content-Type': 'application/json'})
+                response = requests.post(API_URL, json=payload, headers=headers)
                 result = response.json()
                 
                 if response.status_code == 200:
-                    answer = result['candidates'][0]['content']['parts'][0]['text']
+                    answer = result['choices'][0]['message']['content']
                     st.markdown(answer)
                     st.session_state.messages.append({"role": "assistant", "content": answer})
                 else:
-                    # Se il flash fallisce, l'app prova automaticamente il modello Pro
-                    st.error(f"Errore {response.status_code}: Modello non trovato. Tentativo di ripristino...")
-                    # TENTATIVO DI BACKUP AUTOMATICO
-                    alt_url = API_URL.replace("gemini-1.5-flash", "gemini-pro-vision")
-                    response = requests.post(alt_url, json=payload)
-                    # ... logica di risposta ...
+                    err_msg = result.get('error', {}).get('message', 'Errore ignoto')
+                    st.error(f"Errore {response.status_code}: {err_msg}")
             except Exception as e:
                 st.error(f"Connessione fallita: {e}")
