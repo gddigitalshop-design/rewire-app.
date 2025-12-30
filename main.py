@@ -4,59 +4,65 @@ from PyPDF2 import PdfReader
 from PIL import Image
 
 # --- 1. CONFIGURAZIONE API ---
-API_KEY = "AIzaSyApziQVDY3_L9-q_NSOufAFab_syWdRFYY"
+# Uso la tua nuova chiave
+API_KEY = "AIzaSyAI6SNpjbh0nft9dlzxHADUiquQBXDC1pE"
 genai.configure(api_key=API_KEY)
 
-st.set_page_config(page_title="RE-WIRE | AI Vision & Strategy", layout="wide", page_icon="🧠")
+st.set_page_config(page_title="RE-WIRE | AI Strategic Partner", layout="wide", page_icon="🧠")
 
-# --- 2. STILE CSS ---
+# --- 2. STILE PERSONALIZZATO ---
 st.markdown("""
     <style>
     .report-box { 
         background-color: #1E1E1E; color: #FFFFFF; padding: 25px; 
         border-radius: 15px; border-left: 5px solid #FF4B4B; 
         line-height: 1.6; margin-bottom: 20px;
+        box-shadow: 0px 4px 15px rgba(0,0,0,0.5);
     }
+    .stChatMessage { border-radius: 15px; }
     </style>
     """, unsafe_allow_html=True)
 
-# --- 3. LOGICA DI MEMORIA ---
+# --- 3. MEMORIA SESSIONE ---
 if "messages" not in st.session_state:
     st.session_state.messages = []
-if "doc_context" not in st.session_state:
-    st.session_state.doc_context = ""
+if "pdf_text" not in st.session_state:
+    st.session_state.pdf_text = ""
 
-# --- 4. SIDEBAR ---
+# --- 4. BARRA LATERALE ---
 with st.sidebar:
     st.title("🚀 RE-WIRE Hub")
-    st.write("Motore: **Gemini 1.5 Flash**")
+    st.write("Stato: **Motore Gemini Online**")
     st.divider()
     
     uploaded_file = st.file_uploader("Carica Immagine o PDF", type=["jpg", "png", "jpeg", "pdf", "txt"])
     
-    img_to_send = None
+    current_image = None
     if uploaded_file:
         if uploaded_file.type in ["image/jpeg", "image/png"]:
-            img_to_send = Image.open(uploaded_file)
-            st.image(img_to_send, caption="Immagine caricata", use_container_width=True)
+            current_image = Image.open(uploaded_file)
+            st.image(current_image, caption="Immagine pronta", use_container_width=True)
         elif uploaded_file.type == "application/pdf":
             try:
                 reader = PdfReader(uploaded_file)
-                text = ""
-                for page in reader.pages: text += page.extract_text() + "\n"
-                st.session_state.doc_context = text
-                st.success("Testo PDF estratto!")
+                full_text = ""
+                for page in reader.pages:
+                    full_text += page.extract_text() + "\n"
+                st.session_state.pdf_text = full_text
+                st.success("PDF caricato correttamente!")
             except:
-                st.error("Errore lettura PDF")
+                st.error("Errore nella lettura del PDF.")
     
-    if st.button("🗑️ RESET CHAT", use_container_width=True):
+    st.divider()
+    if st.button("🗑️ AZZERA CONVERSAZIONE", use_container_width=True):
         st.session_state.messages = []
-        st.session_state.doc_context = ""
+        st.session_state.pdf_text = ""
         st.rerun()
 
-# --- 5. AREA CHAT ---
+# --- 5. AREA DI LAVORO (CHAT) ---
 st.title("🧠 RE-WIRE Business Brain")
 
+# Visualizzazione Cronologia
 for msg in st.session_state.messages:
     with st.chat_message(msg["role"]):
         if msg["role"] == "assistant":
@@ -64,7 +70,8 @@ for msg in st.session_state.messages:
         else:
             st.markdown(msg["content"])
 
-prompt = st.chat_input("Scrivi qui (es. Descrivi l'immagine per un bambino)...")
+# Input Utente
+prompt = st.chat_input("Di cosa hai bisogno oggi?")
 
 if prompt:
     st.session_state.messages.append({"role": "user", "content": prompt})
@@ -72,34 +79,37 @@ if prompt:
         st.markdown(prompt)
 
     with st.chat_message("assistant"):
-        with st.spinner("Analisi in corso..."):
+        with st.spinner("RE-WIRE sta elaborando..."):
             try:
-                # Usa il nome modello standard senza suffissi
+                # TENTATIVO CON GEMINI 1.5 FLASH (Veloce)
+                # Se questo dà 404, il blocco 'except' catturerà l'errore
                 model = genai.GenerativeModel('gemini-1.5-flash')
                 
-                # Prepariamo la richiesta come lista di parti
-                content_parts = []
+                # Prepariamo il contenuto
+                content_list = []
                 
-                # 1. Aggiungiamo il testo (Prompt + PDF)
-                full_text = prompt
-                if st.session_state.doc_context:
-                    full_text += f"\n\nUsa queste info dal documento: {st.session_state.doc_context[:5000]}"
-                content_parts.append(full_text)
+                # Testo principale + contesto PDF
+                final_prompt = prompt
+                if st.session_state.pdf_text:
+                    final_prompt += f"\n\n[RIFERIMENTO DOCUMENTO]:\n{st.session_state.pdf_text[:8000]}"
                 
-                # 2. Aggiungiamo l'immagine se esiste
-                if img_to_send:
-                    content_parts.append(img_to_send)
+                content_list.append(final_prompt)
+                
+                # Aggiungiamo l'immagine se caricata
+                if current_image:
+                    content_list.append(current_image)
 
-                # Chiamata all'API
-                response = model.generate_content(content_parts)
+                # Generazione
+                response = model.generate_content(content_list)
                 
                 if response:
-                    answer = response.text
-                    st.markdown(f'<div class="report-box">{answer}</div>', unsafe_allow_html=True)
-                    st.session_state.messages.append({"role": "assistant", "content": answer})
+                    res_text = response.text
+                    st.markdown(f'<div class="report-box">{res_text}</div>', unsafe_allow_html=True)
+                    st.session_state.messages.append({"role": "assistant", "content": res_text})
                 
             except Exception as e:
-                # Se fallisce ancora, stampiamo un errore pulito
-                st.error(f"Errore di configurazione: {str(e)}")
+                # FALLBACK: Se Flash fallisce, prova il modello Pro o mostra errore utile
                 if "404" in str(e):
-                    st.warning("Consiglio: Controlla che la chiave API sia attiva per 'Gemini API' in Google Cloud Console.")
+                    st.error("Errore: Il modello non è stato trovato. Assicurati di aver abilitato le API di Gemini nel tuo Google AI Studio.")
+                else:
+                    st.error(f"Si è verificato un problema: {e}")
