@@ -1,7 +1,5 @@
 streamlit
 groq
-openai
-PyPDF2
 fpdf2
 Pillow
 requests
