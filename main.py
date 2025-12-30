@@ -4,128 +4,113 @@ import io
 from fpdf import FPDF
 from PyPDF2 import PdfReader
 
-# --- 1. CONFIGURAZIONE PAGINA ---
-st.set_page_config(page_title="RE-WIRE Business Brain", layout="wide", page_icon="📈")
+# --- 1. CONFIGURAZIONE ESTETICA ---
+st.set_page_config(page_title="RE-WIRE Business Brain", layout="wide", page_icon="🧠")
 
-# --- 2. LOGICA DI LOGIN ---
-if "authenticated" not in st.session_state:
-    st.session_state.authenticated = False
+# CSS per rendere l'interfaccia meno "fredda"
+st.markdown("""
+    <style>
+    .main { background-color: #0E1117; }
+    .stTextArea textarea { background-color: #161B22; color: white; border-radius: 10px; }
+    .stButton button { border-radius: 20px; transition: 0.3s; }
+    .stButton button:hover { background-color: #FF4B4B; color: white; }
+    </style>
+    """, unsafe_allow_html=True)
 
-def check_login():
-    if not st.session_state.authenticated:
-        st.markdown("<h1 style='text-align: center;'>🔐 RE-WIRE Business Access</h1>", unsafe_allow_html=True)
-        
-        # Centriamo il modulo di login
-        col1, col2, col3 = st.columns([1,1,1])
-        with col2:
-            input_user = st.text_input("Username", key="user")
-            input_pass = st.text_input("Password", type="password", key="pass")
-            
-            if st.button("ACCEDI AL SISTEMA", use_container_width=True):
-                # CONTROLLO CREDENZIALI (Modifica qui per il cliente)
-                if input_user == "admin" and input_pass == "12345":
-                    st.session_state.authenticated = True
-                    st.rerun()
-                else:
-                    st.error("Credenziali non valide. Riprova.")
-        return False
-    return True
+# --- 2. GESTIONE MEMORIA (Session State) ---
+if "chat_history" not in st.session_state:
+    st.session_state.chat_history = []
+if "current_template" not in st.session_state:
+    st.session_state.current_template = None
 
-# --- ESECUZIONE APP (Solo se autenticato) ---
-if check_login():
+# Funzione per esportare in PDF
+def crea_pdf_output(testo):
+    pdf = FPDF()
+    pdf.add_page()
+    pdf.set_font("helvetica", "B", 16)
+    pdf.cell(0, 10, txt="RE-WIRE BUSINESS STRATEGY", ln=True, align='C')
+    pdf.ln(10)
+    pdf.set_font("helvetica", size=11)
+    pdf.multi_cell(0, 8, txt=testo.encode('latin-1', 'ignore').decode('latin-1'))
+    return pdf.output()
+
+# --- 3. BARRA LATERALE (Minimalista e Utile) ---
+with st.sidebar:
+    st.title("🚀 RE-WIRE Hub")
+    st.markdown("---")
     
-    # Inizializzazione Session State per i dati
-    if "current_template" not in st.session_state:
-        st.session_state.current_template = None
-    if "last_prompt" not in st.session_state:
-        st.session_state.last_prompt = ""
-
-    # Funzione per creare il PDF
-    def crea_pdf_output(testo):
-        pdf = FPDF()
-        pdf.add_page()
-        pdf.set_font("helvetica", "B", 16)
-        pdf.cell(0, 10, txt="RE-WIRE BUSINESS REPORT", ln=True, align='C')
-        pdf.ln(10)
-        pdf.set_font("helvetica", size=11)
-        testo_safe = testo.encode('latin-1', 'ignore').decode('latin-1')
-        pdf.multi_cell(0, 8, txt=testo_safe)
-        return pdf.output()
-
-    # --- 3. BARRA LATERALE ---
-    with st.sidebar:
-        st.title("⚙️ RE-WIRE Hub")
-        st.write("Utente: **Amministratore**")
-        
-        tipo_lavoro = st.selectbox(
-            "Modelli Strategici:",
-            ["Analisi Libera", "Business Plan Executive (Riunioni)", "Analisi SWOT", "Piano Marketing"]
-        )
-        
-        st.divider()
-        uploaded_file = st.file_uploader("Carica PDF o TXT", type=["txt", "pdf"])
-        
-        contenuto_file = ""
-        if uploaded_file:
-            try:
-                if uploaded_file.type == "application/pdf":
-                    reader = PdfReader(uploaded_file)
-                    for page in reader.pages:
-                        contenuto_file += page.extract_text() + "\n"
-                else:
-                    contenuto_file = uploaded_file.getvalue().decode("utf-8")
-                st.success("File caricato")
-            except:
-                st.error("Errore lettura file")
-
-        st.divider()
-
-        if st.session_state.current_template:
-            st.download_button("📄 TXT", st.session_state.current_template, "report.txt", use_container_width=True)
-            try:
-                pdf_data = crea_pdf_output(st.session_state.current_template)
-                st.download_button("📕 PDF", bytes(pdf_data), "report.pdf", "application/pdf", use_container_width=True)
-            except:
-                st.error("Errore PDF")
-
-        if st.button("🗑️ RESET SESSIONE", use_container_width=True):
-            st.session_state.current_template = None
-            st.session_state.last_prompt = ""
-            st.rerun()
-            
-        if st.button("🚪 LOGOUT", use_container_width=True):
-            st.session_state.authenticated = False
-            st.rerun()
-
-    # --- 4. AREA CENTRALE ---
-    st.title("📈 RE-WIRE Business Brain")
+    st.subheader("📁 I tuoi documenti")
+    uploaded_file = st.file_uploader("Trascina un PDF o un TXT", type=["txt", "pdf"])
     
-    c_prompt = st.text_area("Descrizione o Istruzioni:", value=st.session_state.last_prompt, height=150)
-
-    if st.button("🚀 AVVIA ELABORAZIONE", use_container_width=True):
-        if c_prompt or contenuto_file:
-            with st.spinner("Analisi in corso..."):
-                try:
-                    client = Groq(api_key=st.secrets["GROQ_API_KEY"])
-                    context = f"Tipo: {tipo_lavoro}\nFile: {contenuto_file[:10000]}\nInput: {c_prompt}"
-                    res = client.chat.completions.create(
-                        messages=[{"role": "user", "content": context}],
-                        model="llama-3.3-70b-versatile"
-                    )
-                    st.session_state.current_template = res.choices[0].message.content
-                    st.session_state.last_prompt = c_prompt
-                    st.rerun()
-                except Exception as e:
-                    st.error(f"Errore API: {e}")
+    contenuto_file = ""
+    if uploaded_file:
+        if uploaded_file.type == "application/pdf":
+            reader = PdfReader(uploaded_file)
+            for page in reader.pages: contenuto_file += page.extract_text() + "\n"
         else:
-            st.warning("Inserisci dati per procedere.")
+            contenuto_file = uploaded_file.getvalue().decode("utf-8")
+        st.success("Documento pronto!")
 
+    st.markdown("---")
     if st.session_state.current_template:
-        st.markdown(
-            f"""
-            <div style="background-color: #1E1E1E; color: #FFFFFF; padding: 25px; border-radius: 12px; border: 1px solid #444444; white-space: pre-wrap; max-height: 500px; overflow-y: auto;">
-            {st.session_state.current_template}
-            </div>
-            """, 
-            unsafe_allow_html=True
-        )
+        st.subheader("💾 Esporta lavoro")
+        pdf_data = crea_pdf_output(st.session_state.current_template)
+        st.download_button("📕 SCARICA REPORT PDF", bytes(pdf_data), "strategia_rewire.pdf", "application/pdf", use_container_width=True)
+
+    if st.button("🧹 PULISCI CONVERSAZIONE", use_container_width=True):
+        st.session_state.chat_history = []
+        st.session_state.current_template = None
+        st.rerun()
+
+# --- 4. AREA CENTRALE (Il cuore dell'AI) ---
+st.title("🧠 Benvenuto in RE-WIRE Business")
+st.write("Ciao! Sono il tuo braccio destro strategico. Come posso aiutarti a far crescere il tuo progetto oggi?")
+
+# Visualizziamo la cronologia dei messaggi per renderla una "Chat" vera
+for msg in st.session_state.chat_history:
+    with st.chat_message(msg["role"]):
+        st.markdown(msg["content"])
+
+# Input dell'utente
+prompt = st.chat_input("Scrivi qui la tua idea o chiedi un'analisi...")
+
+if prompt:
+    # Aggiungiamo il messaggio dell'utente alla storia
+    st.session_state.chat_history.append({"role": "user", "content": prompt})
+    with st.chat_message("user"):
+        st.markdown(prompt)
+
+    with st.chat_message("assistant"):
+        with st.spinner("Sto elaborando una visione per te..."):
+            try:
+                client = Groq(api_key=st.secrets["GROQ_API_KEY"])
+                
+                # Istruzioni "Umane"
+                system_prompt = (
+                    "Sei RE-WIRE AI, un partner strategico brillante, carismatico e pratico. "
+                    "Non rispondere come un modulo burocratico. Parla in modo fluido, dai consigli "
+                    "azionabili e sii creativo. Usa grassetti e liste per rendere il testo leggibile."
+                )
+                
+                # Costruiamo il contesto con la storia della chat
+                messages = [{"role": "system", "content": system_prompt}]
+                messages.extend(st.session_state.chat_history[-5:]) # Ricorda gli ultimi 5 messaggi
+                
+                # Se c'è un file, lo iniettiamo nell'ultimo messaggio
+                if contenuto_file:
+                    messages[-1]["content"] += f"\n\n[Analizza anche questi dati dal file: {contenuto_file[:5000]}]"
+
+                res = client.chat.completions.create(
+                    messages=messages,
+                    model="llama-3.3-70b-versatile"
+                )
+                
+                risposta = res.choices[0].message.content
+                st.markdown(risposta)
+                
+                # Salviamo la risposta e il template
+                st.session_state.chat_history.append({"role": "assistant", "content": risposta})
+                st.session_state.current_template = risposta
+                
+            except Exception as e:
+                st.error(f"Ehi, qualcosa è andato storto: {e}")
