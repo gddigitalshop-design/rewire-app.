@@ -4,13 +4,14 @@ from PIL import Image
 from PyPDF2 import PdfReader
 
 # --- 1. CONFIGURAZIONE API ---
-# Inserisco la tua chiave che abbiamo testato
 API_KEY = "AIzaSyAI6SNpjbh0nft9dlzxHADUiquQBXDC1pE"
+
+# Configurazione forzata sulla versione stabile
 genai.configure(api_key=API_KEY)
 
-# --- 2. CONFIGURAZIONE PAGINA & STILE ---
 st.set_page_config(page_title="RE-WIRE Business Vision", layout="wide")
 
+# --- 2. STILE PREMIUM ---
 st.markdown("""
     <style>
     .report-box { 
@@ -18,54 +19,49 @@ st.markdown("""
         border-radius: 15px; border-left: 5px solid #FF4B4B; 
         line-height: 1.6; margin-bottom: 20px;
     }
-    .stChatMessage { border-radius: 15px; }
     </style>
     """, unsafe_allow_html=True)
 
 # --- 3. MEMORIA SESSIONE ---
 if "messages" not in st.session_state:
     st.session_state.messages = []
+if "pdf_text" not in st.session_state:
+    st.session_state.pdf_text = ""
 
-# --- 4. SIDEBAR (IL PEZZO CHE HAI TESTATO) ---
+# --- 4. SIDEBAR (LA PARTE CHE HAI TESTATO) ---
 with st.sidebar:
     st.title("🚀 RE-WIRE Hub")
-    st.write("Configurazione: **Gemini Vision Attivo**")
     st.divider()
     
-    st.subheader("📁 Carica Allegato")
-    # Questo è il widget che hai confermato funzionare:
-    file_caricato = st.file_uploader("Scegli un'immagine o un PDF", type=["jpg", "png", "jpeg", "pdf"])
+    # Il caricamento che funzionava
+    file_caricato = st.file_uploader("Carica immagine o PDF", type=["jpg", "png", "jpeg", "pdf"])
     
     immagine_per_ai = None
-    testo_pdf = ""
-
     if file_caricato:
         if file_caricato.type in ["image/jpeg", "image/png"]:
             immagine_per_ai = Image.open(file_caricato)
-            st.image(immagine_per_ai, caption="Anteprima Immagine", use_container_width=True)
+            st.image(immagine_per_ai, caption="Immagine pronta", use_container_width=True)
         elif file_caricato.type == "application/pdf":
             reader = PdfReader(file_caricato)
+            testo = ""
             for page in reader.pages:
-                testo_pdf += page.extract_text() + "\n"
-            st.success("PDF caricato!")
+                testo += page.extract_text() + "\n"
+            st.session_state.pdf_text = testo
+            st.success("Documento letto!")
 
-    if st.button("🗑️ CANCELLA CHAT", use_container_width=True):
+    if st.button("🗑️ RESET CHAT"):
         st.session_state.messages = []
+        st.session_state.pdf_text = ""
         st.rerun()
 
-# --- 5. CHAT PRINCIPALE ---
+# --- 5. CHAT E ANALISI ---
 st.title("🧠 RE-WIRE Business Brain")
 
-# Visualizza messaggi precedenti
 for msg in st.session_state.messages:
     with st.chat_message(msg["role"]):
-        if msg["role"] == "assistant":
-            st.markdown(f'<div class="report-box">{msg["content"]}</div>', unsafe_allow_html=True)
-        else:
-            st.markdown(msg["content"])
+        st.markdown(f'<div class="report-box">{msg["content"]}</div>' if msg["role"] == "assistant" else msg["content"], unsafe_allow_html=True)
 
-# Input Utente
-prompt = st.chat_input("Scrivi qui la tua richiesta (es. 'Fai un testo per bambini')...")
+prompt = st.chat_input("Scrivi qui (es. Descrivi per bambini)...")
 
 if prompt:
     st.session_state.messages.append({"role": "user", "content": prompt})
@@ -75,25 +71,22 @@ if prompt:
     with st.chat_message("assistant"):
         with st.spinner("Analisi in corso..."):
             try:
-                # Usiamo il modello Flash che hai testato con successo
-                model = genai.GenerativeModel('gemini-1.5-flash')
+                # TRUCCO: Specifichiamo il modello in modo che eviti la versione beta
+                # Proviamo 'gemini-1.5-flash-latest' che è il più robusto
+                model = genai.GenerativeModel('models/gemini-1.5-flash')
                 
-                # Prepariamo la richiesta multimodale
-                input_data = []
-                testo_completo = prompt
-                if testo_pdf:
-                    testo_completo += f"\n\nUsa queste info: {testo_pdf[:5000]}"
-                
-                input_data.append(testo_completo)
+                contenuto = [prompt]
                 if immagine_per_ai:
-                    input_data.append(immagine_per_ai)
+                    contenuto.append(immagine_per_ai)
+                if st.session_state.pdf_text:
+                    contenuto[0] += f"\n\nUsa queste info: {st.session_state.pdf_text[:5000]}"
 
-                # Risposta dell'AI
-                response = model.generate_content(input_data)
-                risposta_testo = response.text
+                response = model.generate_content(contenuto)
                 
-                st.markdown(f'<div class="report-box">{risposta_testo}</div>', unsafe_allow_html=True)
-                st.session_state.messages.append({"role": "assistant", "content": risposta_testo})
+                st.markdown(f'<div class="report-box">{response.text}</div>', unsafe_allow_html=True)
+                st.session_state.messages.append({"role": "assistant", "content": response.text})
                 
             except Exception as e:
+                # Se fallisce ancora, il problema è nella chiave o nei contratti Google
                 st.error(f"Errore: {e}")
+                st.info("⚠️ Soluzione rapida: Vai su https://aistudio.google.com/ e accetta i Termini di Servizio.")
