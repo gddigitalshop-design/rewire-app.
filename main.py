@@ -74,32 +74,32 @@ if prompt:
     with st.chat_message("assistant"):
         with st.spinner("Analisi in corso..."):
             try:
-                # CORREZIONE QUI: Usiamo il nome del modello senza prefissi strani
-                model = genai.GenerativeModel('gemini-1.5-flash-latest')
+                # Usa il nome modello standard senza suffissi
+                model = genai.GenerativeModel('gemini-1.5-flash')
                 
-                # Prepariamo la richiesta
-                request_content = []
+                # Prepariamo la richiesta come lista di parti
+                content_parts = []
                 
-                # Aggiungiamo il prompt testuale
-                full_prompt = prompt
+                # 1. Aggiungiamo il testo (Prompt + PDF)
+                full_text = prompt
                 if st.session_state.doc_context:
-                    full_prompt += f"\n\nUsa queste informazioni dal PDF: {st.session_state.doc_context[:5000]}"
+                    full_text += f"\n\nUsa queste info dal documento: {st.session_state.doc_context[:5000]}"
+                content_parts.append(full_text)
                 
-                request_content.append(full_prompt)
-                
-                # Se c'è un'immagine, la aggiungiamo alla lista
+                # 2. Aggiungiamo l'immagine se esiste
                 if img_to_send:
-                    request_content.append(img_to_send)
+                    content_parts.append(img_to_send)
 
-                # Generazione
-                response = model.generate_content(request_content)
+                # Chiamata all'API
+                response = model.generate_content(content_parts)
                 
-                if response.text:
+                if response:
                     answer = response.text
                     st.markdown(f'<div class="report-box">{answer}</div>', unsafe_allow_html=True)
                     st.session_state.messages.append({"role": "assistant", "content": answer})
-                else:
-                    st.error("L'AI non ha prodotto testo. Riprova con un'altra immagine.")
                 
             except Exception as e:
-                st.error(f"Errore di connessione: {e}")
+                # Se fallisce ancora, stampiamo un errore pulito
+                st.error(f"Errore di configurazione: {str(e)}")
+                if "404" in str(e):
+                    st.warning("Consiglio: Controlla che la chiave API sia attiva per 'Gemini API' in Google Cloud Console.")
