@@ -1,136 +1,115 @@
 import streamlit as st
 from groq import Groq
-import PyPDF2
 import random
 import urllib.parse
 import requests
 import io
 from PIL import Image
 
-# --- 1. CONFIGURAZIONE ---
-st.set_page_config(page_title="RE-WIRE Business Brain", page_icon="📈", layout="wide")
+# --- 1. CONFIGURAZIONE E PERSISTENZA ---
+st.set_page_config(page_title="RE-WIRE Business", layout="wide")
 
+# Inizializzazione variabili di sessione (per non perdere i dati)
 if "logged_in" not in st.session_state:
     st.session_state.logged_in = False
-if "messages" not in st.session_state:
-    st.session_state.messages = []
 if "current_img_data" not in st.session_state:
     st.session_state.current_img_data = None
 if "current_template" not in st.session_state:
     st.session_state.current_template = None
 
-# --- 2. LOGIN (Persistente per la sessione) ---
+# --- 2. GESTIONE ACCESSO (Semplificata per il browser) ---
 USERS = {"admin": "tuapassword123", "cliente1": "rewire2025"}
 
-def login_page():
-    st.markdown("<h1 style='text-align: center; color: #007BFF;'>RE-WIRE SYSTEM</h1>", unsafe_allow_html=True)
+def login():
+    st.markdown("<h1 style='text-align: center;'>RE-WIRE LOGIN</h1>", unsafe_allow_html=True)
     col1, col2, col3 = st.columns([1,2,1])
     with col2:
-        u = st.text_input("Username", key="login_u")
-        p = st.text_input("Password", type="password", key="login_p")
-        if st.button("ACCEDI"):
+        # Usando queste key, il browser (Chrome/Safari) ti chiederà di salvare la pass
+        u = st.text_input("Username", key="auth_u")
+        p = st.text_input("Password", type="password", key="auth_p")
+        if st.button("SBLOCCA SISTEMA"):
             if u in USERS and USERS[u] == p:
                 st.session_state.logged_in = True
-                st.session_state.user_role = u
                 st.rerun()
             else:
                 st.error("Credenziali errate")
 
 if not st.session_state.logged_in:
-    login_page()
+    login()
     st.stop()
 
-# --- 3. MOTORE IMMAGINI CON CONTROLLO ANTI-CRASH ---
-def genera_immagine_sicura(prompt_utente):
-    seed = random.randint(1, 1000000)
-    prompt_encoded = urllib.parse.quote(f"{prompt_utente}, professional, 8k, highly detailed")
-    
-    # Proviamo l'endpoint alternativo che è meno soggetto a blocchi
-    url = f"https://pollinations.ai/p/{prompt_encoded}?width=1024&height=1024&seed={seed}&model=flux&nologo=true"
-    
-    try:
-        r = requests.get(url, timeout=20)
-        if r.status_code == 200:
-            # CONTROLLO CRITICO: Verifichiamo se è davvero un'immagine
-            try:
-                img = Image.open(io.BytesIO(r.content))
-                img.verify() # Se non è un'immagine, qui genera errore
-                return r.content
-            except:
-                return "formato_errato"
-        return "errore_server"
-    except:
-        return "timeout"
-
-# --- 4. INTERFACCIA ---
+# --- 3. BARRA LATERALE (Pulsanti fissi) ---
 with st.sidebar:
-    st.title("RE-WIRE PANEL")
-    if st.button("LOGOUT"):
+    st.title("⚙️ Gestione Sistema")
+    st.write(f"Utente attivo: **admin**")
+    
+    # PULSANTI DI CANCELLAZIONE SEMPRE VISIBILI
+    if st.button("🗑️ CANCELLA TUTTO", use_container_width=True):
+        st.session_state.current_img_data = None
+        st.session_state.current_template = None
+        st.rerun()
+        
+    if st.button("🚪 ESCI (Logout)", use_container_width=True):
         st.session_state.logged_in = False
         st.rerun()
 
+# --- 4. AREA CREAZIONE ---
 st.header("🚀 Business Hub")
-c_prompt = st.text_input("Cosa vuoi creare oggi?")
+c_prompt = st.text_input("Cosa vuoi creare? (es: Centro commerciale, Logo, Strategia)")
 
-col_btn1, col_btn2 = st.columns(2)
+col_a, col_b = st.columns(2)
 
-with col_btn1:
-    if st.button("🖼️ GENERA IMMAGINE HD"):
+with col_a:
+    if st.button("🖼️ GENERA IMMAGINE HD", use_container_width=True):
         if c_prompt:
-            with st.spinner("L'AI sta disegnando..."):
-                risultato = genera_immagine_sicura(c_prompt)
-                if isinstance(risultato, bytes):
-                    st.session_state.current_img_data = risultato
-                elif risultato == "formato_errato":
-                    st.error("⚠️ Il server ha inviato un errore (Rate Limit). Riprova tra 30 secondi.")
-                else:
-                    st.error("❌ Connessione persa. Riprova.")
+            with st.spinner("Generazione..."):
+                seed = random.randint(1, 1000000)
+                url = f"https://image.pollinations.ai/prompt/{urllib.parse.quote(c_prompt)}?seed={seed}&nologo=true&model=flux"
+                try:
+                    r = requests.get(url, timeout=20)
+                    # Verifica se è un'immagine reale o l'errore del server
+                    test_img = Image.open(io.BytesIO(r.content))
+                    st.session_state.current_img_data = r.content
+                except:
+                    st.error("⚠️ Server AI sovraccarico. Attendi 30 secondi.")
         else:
-            st.warning("Inserisci un testo!")
+            st.warning("Inserisci un'idea!")
 
-with col_btn2:
-    if st.button("📝 CREA TEMPLATE"):
+with col_b:
+    if st.button("📝 CREA TEMPLATE", use_container_width=True):
         if c_prompt:
             with st.spinner("Scrittura..."):
                 try:
                     client = Groq(api_key=st.secrets["GROQ_API_KEY"])
                     res = client.chat.completions.create(
-                        messages=[{"role": "user", "content": f"Crea un template business per: {c_prompt}"}],
+                        messages=[{"role": "user", "content": f"Crea un template professionale per: {c_prompt}"}],
                         model="llama-3.3-70b-versatile"
                     )
                     st.session_state.current_template = res.choices[0].message.content
                 except:
-                    st.error("Errore Groq API")
+                    st.error("Errore connessione Groq.")
 
-# --- VISUALIZZAZIONE RISULTATI ---
-if st.session_state.current_img_data:
-    st.markdown("### Anteprima Visual")
-    st.image(st.session_state.current_img_data, use_container_width=True)
-    st.download_button("💾 SCARICA", st.session_state.current_img_data, "file.png", "image/png")
-    if st.button("🗑️ CHIUDI IMMAGINE"):
-        st.session_state.current_img_data = None
-        st.rerun()
-
-if st.session_state.current_template:
-    st.info("Template Generato:")
-    st.markdown(st.session_state.current_template)
-    if st.button("🗑️ CHIUDI TEMPLATE"):
-        st.session_state.current_template = None
-        st.rerun()
-
+# --- 5. VISUALIZZAZIONE E SALVATAGGIO ---
 st.divider()
 
-# --- CHAT ---
-for m in st.session_state.messages:
-    if m["role"] != "system":
-        with st.chat_message(m["role"]): st.markdown(m["content"])
+if st.session_state.current_img_data:
+    st.subheader("🖼️ Risultato Visuale")
+    st.image(st.session_state.current_img_data, use_container_width=True)
+    # TASTO SALVATAGGIO SEMPRE SOTTO L'IMMAGINE
+    st.download_button(
+        label="💾 SALVA IMMAGINE SU PC",
+        data=st.session_state.current_img_data,
+        file_name="progetto_rewire.png",
+        mime="image/png",
+        use_container_width=True
+    )
 
-if p := st.chat_input("Chiedi alla tua AI..."):
-    st.session_state.messages.append({"role": "user", "content": p})
-    with st.chat_message("user"): st.markdown(p)
-    with st.chat_message("assistant"):
-        client = Groq(api_key=st.secrets["GROQ_API_KEY"])
-        compl = client.chat.completions.create(messages=st.session_state.messages, model="llama-3.3-70b-versatile")
-        resp = compl.choices[0].message.content
-        st.markdown(resp)
-        st.session_state.messages.append({"role": "assistant", "content": resp})
+if st.session_state.current_template:
+    st.subheader("📝 Template Strategico")
+    st.info(st.session_state.current_template)
+    st.download_button(
+        label="💾 SALVA TESTO",
+        data=st.session_state.current_template,
+        file_name="template_rewire.txt",
+        use_container_width=True
+    )
