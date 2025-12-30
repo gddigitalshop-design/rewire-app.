@@ -51,45 +51,37 @@ if not st.session_state.logged_in:
     st.stop()
 
 # --- 3. FUNZIONI TECNICHE ---
-def genera_immagine(prompt_immagine):
-    # Il trucco del seed casuale per forzare il cambio immagine (Uva vs Fico)
-    seed = random.randint(0, 999999)
-    prompt_pulito = urllib.parse.quote(prompt_immagine)
-    # Usiamo il modello Flux per dettagli botanici precisi
-    url = f"https://image.pollinations.ai/prompt/{prompt_pulito}?width=1024&height=1024&nologo=true&seed={seed}&model=flux"
-    return url
 
-# --- 4. SIDEBAR (Pannello Operativo) ---
-with st.sidebar:
-    st.image("https://img.icons8.com/fluency/96/brainstorming.png", width=80)
-    st.title("Area Riservata")
-    st.write(f"Utente: **{st.session_state.user_role.upper()}**")
-    
-    if st.button("Esci"):
-        st.session_state.logged_in = False
-        st.rerun()
-    
-    st.divider()
-    st.subheader("📂 Analisi Documenti")
-    file = st.file_uploader("Carica PDF aziendali", type="pdf")
-    
-    if file:
-        reader = PyPDF2.PdfReader(file)
-        testo_pdf = "".join([p.extract_text() for p in reader.pages])
-        st.session_state.messages.append({"role": "system", "content": f"CONTESTO PDF: {testo_pdf[:4000]}"})
-        st.success(f"File '{file.name}' analizzato!")
-        st.divider()
-    if  st.button("🗑️ Svuota Sessione", help="Cancella cronologia e immagini"):
-        st.session_state.messages = []
-        st.session_state.generated_image = None
-        st.rerun()
 # --- 5. AREA PRINCIPALE (Generatore e Chat) ---
 st.markdown(f"### Benvenuto, {st.session_state.user_role.capitalize()}")
 
 # Sezione ✨ Generatore Creativo
 # --- GENERATORE CREATIVO PROFESSIONALE ---
 st.header("✨ Generatore Creativo")
-c_prompt = st.text_input("Descrivi cosa vuoi creare (es. tegole sarde, logo, piano marketing)...")
+c_prompt = st.textdef genera_immagine(prompt_immagine):
+    try:
+        import urllib.parse
+        import random
+        
+        # La tua API Key di Pollinations
+        api_key = "sk_ENpARXemZP1q6SuLX6Xc7fZW0BHOID6P_"
+        
+        seed = random.randint(0, 999999)
+        prompt_pulito = urllib.parse.quote(prompt_immagine)
+        
+        # URL aggiornato che include l'autenticazione tramite la tua chiave
+        # Usiamo il modello Flux che è il più potente
+        url = f"https://image.pollinations.ai/prompt/{prompt_pulito}?width=1024&height=1024&nologo=true&seed={seed}&model=flux"
+        
+        # Aggiungiamo l'autorizzazione nell'header (fondamentale per sbloccare i limiti)
+        # Nota: Streamlit gestisce la visualizzazione tramite URL, 
+        # se il server richiede l'auth via URL la passiamo così:
+        url_con_auth = f"{url}&auth={api_key}"
+        
+        return url_con_auth
+    except Exception as e:
+        st.error(f"Errore tecnico: {e}")
+        return None_input("Descrivi cosa vuoi creare (es. tegole sarde, logo, piano marketing)...")
 
 col1, col2 = st.columns(2)
 
@@ -168,6 +160,7 @@ if prompt := st.chat_input("Chiedi un'analisi o una strategia..."):
         response = compl.choices[0].message.content
         st.markdown(response)
         st.session_state.messages.append({"role": "assistant", "content": response})
+
 
 
 
