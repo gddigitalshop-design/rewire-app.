@@ -8,45 +8,40 @@ import requests
 # --- 1. CONFIGURAZIONE E PERSISTENZA ---
 st.set_page_config(page_title="RE-WIRE Business Brain", page_icon="📈", layout="wide")
 
-# Inizializziamo lo stato se non esiste
+# Inizializzazione variabili di sessione
 if "logged_in" not in st.session_state:
     st.session_state.logged_in = False
 if "messages" not in st.session_state:
     st.session_state.messages = []
 if "current_img_data" not in st.session_state:
     st.session_state.current_img_data = None
+if "current_template" not in st.session_state:
+    st.session_state.current_template = None
 
 # Stile CSS
 st.markdown("""
     <style>
     .stApp { background-color: #0B0E11; color: #E9ECEF; }
-    .stButton>button { border-radius: 10px; background-color: #007BFF; color: white; width: 100%; border: none; padding: 10px; font-weight: bold; }
-    .main-title { font-size: 3.5rem; font-weight: 800; color: #007BFF; text-align: center; }
+    .stButton>button { border-radius: 10px; background-color: #007BFF; color: white; width: 100%; border: none; padding: 12px; font-weight: bold; }
+    .main-title { font-size: 3rem; font-weight: 800; color: #007BFF; text-align: center; }
     </style>
     """, unsafe_allow_html=True)
 
 # --- 2. DATABASE UTENTI ---
-USERS = {
-    "admin": "tuapassword123",
-    "cliente1": "rewire2025"
-}
+USERS = {"admin": "tuapassword123", "cliente1": "rewire2025"}
 
-# --- 3. LOGICA DI ACCESSO MIGLIORATA ---
+# --- 3. GESTIONE LOGIN (CON TRUCCO PER NON DIGITARE SEMPRE) ---
 def login_page():
-    st.markdown('<p class="main-title">RE-WIRE</p>', unsafe_allow_html=True)
-    st.markdown("<h3 style='text-align: center;'>Area Riservata Business</h3>", unsafe_allow_html=True)
-    
+    st.markdown('<p class="main-title">RE-WIRE LOGIN</p>', unsafe_allow_html=True)
     col1, col2, col3 = st.columns([1,2,1])
     with col2:
-        # Usiamo i widget con 'key' per permettere al browser di ricordarli (Autofill)
-        u = st.text_input("Username", key="user_input")
-        p = st.text_input("Password", type="password", key="pass_input")
-        
-        if st.button("Accedi"):
+        # Usando 'key' fisse, il browser di solito salva i dati per l'autofill
+        u = st.text_input("Username", key="login_u")
+        p = st.text_input("Password", type="password", key="login_p")
+        if st.button("SBLOCCA SISTEMA"):
             if u in USERS and USERS[u] == p:
                 st.session_state.logged_in = True
                 st.session_state.user_role = u
-                st.success("Accesso eseguito!")
                 st.rerun()
             else:
                 st.error("Credenziali errate")
@@ -55,86 +50,98 @@ if not st.session_state.logged_in:
     login_page()
     st.stop()
 
-# --- 4. MOTORE IMMAGINI (DOWNLOAD DIRETTO PER EVITARE STAND-BY) ---
+# --- 4. FUNZIONE GENERAZIONE IMMAGINI (ANTI-BLOCCO) ---
 def genera_immagine_sicura(prompt_utente):
-    api_key = "sk_ENpARXemZP1q6SuLX6Xc7fZW0BHOID6P_"
-    seed = random.randint(1, 999999)
-    prompt_hd = f"{prompt_utente}, cinematic photo, high resolution, 8k, photorealistic"
-    prompt_encoded = urllib.parse.quote(prompt_hd)
+    # Generiamo un seed casuale per forzare il server a ignorare i vecchi errori
+    seed = random.randint(1, 1000000)
+    prompt_pro = f"{prompt_utente}, cinematic style, realistic, 8k, highly detailed"
+    prompt_encoded = urllib.parse.quote(prompt_pro)
     
-    url = f"https://image.pollinations.ai/prompt/{prompt_encoded}?width=1024&height=1024&seed={seed}&model=flux&nologo=true"
+    # URL di backup (usiamo l'endpoint 'p' che spesso è più libero)
+    url = f"https://pollinations.ai/p/{prompt_encoded}?width=1024&height=1024&seed={seed}&model=flux&nologo=true"
     
     try:
-        # Timeout a 20 secondi per dare tempo al server di elaborare
-        response = requests.get(url, timeout=20)
-        if response.status_code == 200:
-            return response.content
-        return None
+        # Proviamo a scaricare l'immagine direttamente per evitare lo standby
+        r = requests.get(url, timeout=15)
+        if r.status_code == 200:
+            return r.content
     except:
         return None
+    return None
 
 # --- 5. INTERFACCIA PRINCIPALE ---
 with st.sidebar:
-    st.title("RE-WIRE Panel")
-    st.write(f"Connesso: **{st.session_state.user_role.upper()}**")
-    
-    # Il tasto Esci resetta tutto
-    if st.button("Esci / Cambia Utente"):
+    st.title("RE-WIRE PANEL")
+    st.write(f"Utente: **{st.session_state.user_role.upper()}**")
+    if st.button("LOGOUT"):
         st.session_state.logged_in = False
-        st.session_state.messages = []
         st.rerun()
-    
     st.divider()
-    if st.button("🗑️ Svuota Chat"):
+    if st.button("🗑️ SVUOTA CHAT"):
         st.session_state.messages = []
         st.rerun()
 
-st.header("✨ Generatore Creativo HD")
-c_prompt = st.text_input("Descrivi cosa vuoi creare (es. un topo, un ufficio moderno, tegole)...")
+st.header("🚀 Business Hub")
+c_prompt = st.text_input("Cosa vuoi creare oggi?")
 
-col1, col2 = st.columns(2)
+# Layout Bottoni
+col_btn1, col_btn2 = st.columns(2)
 
-with col1:
-    if st.button("🖼️ Genera Immagine"):
+with col_btn1:
+    if st.button("🖼️ GENERA IMMAGINE HD"):
         if c_prompt:
-            with st.spinner("L'AI sta disegnando (attendi circa 10s)..."):
-                img_data = genera_immagine_sicura(c_prompt)
-                if img_data:
-                    st.session_state.current_img_data = img_data
+            with st.spinner("L'AI sta disegnando..."):
+                img = genera_immagine_sicura(c_prompt)
+                if img:
+                    st.session_state.current_img_data = img
                 else:
-                    st.error("Il server è sovraccarico. Riprova tra 5 secondi.")
+                    st.error("Errore server (Rate Limit). Riprova tra 10 secondi.")
         else:
-            st.warning("Inserisci una descrizione!")
+            st.warning("Scrivi qualcosa nel campo sopra!")
 
-# --- AREA VISUALIZZAZIONE ---
+with col_btn2:
+    if st.button("📝 CREA TEMPLATE"):
+        if c_prompt:
+            with st.spinner("Scrittura template..."):
+                client = Groq(api_key=st.secrets["GROQ_API_KEY"])
+                res = client.chat.completions.create(
+                    messages=[{"role": "system", "content": "Sei un esperto di business. Crea template professionali."},
+                              {"role": "user", "content": f"Crea un template per: {c_prompt}"}],
+                    model="llama-3.3-70b-versatile"
+                )
+                st.session_state.current_template = res.choices[0].message.content
+        else:
+            st.warning("Scrivi l'argomento del template!")
+
+# --- AREA VISUALIZZAZIONE RISULTATI ---
 if st.session_state.current_img_data:
     st.image(st.session_state.current_img_data, use_container_width=True)
-    st.download_button("💾 Scarica Progetto", st.session_state.current_img_data, "file.png", "image/png")
-    if st.button("❌ Chiudi"):
+    st.download_button("💾 SCARICA IMMAGINE", st.session_state.current_img_data, "creazione.png", "image/png")
+    if st.button("❌ CHIUDI IMMAGINE"):
         st.session_state.current_img_data = None
+        st.rerun()
+
+if st.session_state.current_template:
+    st.info("Template Generato:")
+    st.markdown(st.session_state.current_template)
+    if st.button("❌ CHIUDI TEMPLATE"):
+        st.session_state.current_template = None
         st.rerun()
 
 st.divider()
 
-# --- 6. CHAT AI (GROQ) ---
+# --- 6. CHAT DI SUPPORTO ---
 for m in st.session_state.messages:
     if m["role"] != "system":
         with st.chat_message(m["role"]):
             st.markdown(m["content"])
 
-if p := st.chat_input("Chiedi aiuto per la tua strategia..."):
+if p := st.chat_input("Chiedi aiuto alla tua AI..."):
     st.session_state.messages.append({"role": "user", "content": p})
     with st.chat_message("user"): st.markdown(p)
-    
     with st.chat_message("assistant"):
-        try:
-            client = Groq(api_key=st.secrets["GROQ_API_KEY"])
-            compl = client.chat.completions.create(
-                messages=[{"role": m["role"], "content": m["content"]} for m in st.session_state.messages],
-                model="llama-3.3-70b-versatile"
-            )
-            response = compl.choices[0].message.content
-            st.markdown(response)
-            st.session_state.messages.append({"role": "assistant", "content": response})
-        except Exception as e:
-            st.error(f"Errore Groq: {e}")
+        client = Groq(api_key=st.secrets["GROQ_API_KEY"])
+        compl = client.chat.completions.create(messages=st.session_state.messages, model="llama-3.3-70b-versatile")
+        response = compl.choices[0].message.content
+        st.markdown(response)
+        st.session_state.messages.append({"role": "assistant", "content": response})
