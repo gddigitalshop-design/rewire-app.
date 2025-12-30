@@ -1,29 +1,33 @@
 import streamlit as st
 import google.generativeai as genai
 from PIL import Image
-import fitz  # PyMuPDF
+import fitz  # PyMuPDF per i PDF
 import io
 
-# --- 1. CONFIGURAZIONE GOOGLE GEMINI (Versione Stabile) ---
-GEMINI_API_KEY = "AIzaSyCxnOHGouptLrRn491MLvOJrDyqF8aMC9Y"
-
-# Forza l'uso della versione stabile delle API invece della beta
+# --- 1. CONFIGURAZIONE MOTORE GOOGLE STABLE ---
+# Utilizziamo la tua nuova chiave API
+GEMINI_API_KEY = "AIzaSyA8UTodWbYVU3Kzvc4Cg2brAoPinj5ciZc"
 genai.configure(api_key=GEMINI_API_KEY)
 
-# Usiamo il modello Flash: è il più compatibile con le immagini
+# Puntiamo al modello Flash 1.5, il più affidabile per la visione
 model = genai.GenerativeModel('gemini-1.5-flash')
 
-st.set_page_config(page_title="RE-WIRE AI Business", layout="wide", page_icon="🧠")
+st.set_page_config(page_title="RE-WIRE Business Vision", layout="wide", page_icon="🧠")
 
-# --- 2. LOGIN (Password: rewire2026) ---
+# --- 2. SISTEMA DI LOGIN ---
 if "auth" not in st.session_state: st.session_state.auth = False
+
 if not st.session_state.auth:
-    st.title("🔐 Accesso Licenza RE-WIRE")
-    pwd = st.text_input("Inserisci Password", type="password")
-    if st.button("SBLOCCA SISTEMA"):
-        if pwd == "rewire2026":
-            st.session_state.auth = True
-            st.rerun()
+    st.title("🔐 RE-WIRE AI | Accesso Licenza")
+    col1, col2, col3 = st.columns([1,2,1])
+    with col2:
+        pwd = st.text_input("Inserisci Password Licenza", type="password")
+        if st.button("SBLOCCA SISTEMA"):
+            if pwd == "rewire2026":
+                st.session_state.auth = True
+                st.rerun()
+            else:
+                st.error("Accesso negato. Password errata.")
     st.stop()
 
 # --- 3. GESTIONE DOCUMENTI ---
@@ -31,57 +35,61 @@ if "messages" not in st.session_state:
     st.session_state.messages = []
 
 def process_file(uploaded_file):
+    """Estrae l'immagine da una foto o dalla prima pagina di un PDF"""
     if uploaded_file.type == "application/pdf":
         doc = fitz.open(stream=uploaded_file.read(), filetype="pdf")
         page = doc.load_page(0)
         pix = page.get_pixmap()
-        return Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
+        img = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
+        return img
     else:
         return Image.open(uploaded_file)
 
-# --- 4. INTERFACCIA ---
+# --- 4. INTERFACCIA UTENTE ---
 st.title("🧠 RE-WIRE Business Intelligence")
 
 with st.sidebar:
     st.header("📁 Hub Documenti")
-    file = st.file_uploader("Carica Foto o PDF", type=["jpg", "png", "jpeg", "pdf"])
-    if st.button("🗑️ Reset Chat"):
+    file = st.file_uploader("Carica una foto o un PDF", type=["jpg", "png", "jpeg", "pdf"])
+    if st.button("🗑️ Svuota Chat"):
         st.session_state.messages = []
         st.rerun()
     st.divider()
-    st.caption("Motore: Gemini 1.5 Flash Stable")
+    st.caption("Versione 2026.1 - Motore Gemini Stable")
 
+# Anteprima del documento
 img_obj = None
 if file:
     try:
         img_obj = process_file(file)
-        st.image(img_obj, width=400, caption="Documento analizzabile")
+        st.image(img_obj, width=400, caption="Documento pronto per l'analisi")
     except Exception as e:
         st.error(f"Errore caricamento: {e}")
 
-# --- 5. CHAT ---
+# --- 5. CHAT INTERATTIVA ---
+# Mostra la cronologia messaggi
 for msg in st.session_state.messages:
     with st.chat_message(msg["role"]):
         st.markdown(msg["content"])
 
-if prompt := st.chat_input("Chiedi all'AI sul documento..."):
+# Barra di input per l'utente
+if prompt := st.chat_input("Fai una domanda sul documento..."):
     st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"):
         st.markdown(prompt)
 
     with st.chat_message("assistant"):
-        with st.spinner("Analisi in corso..."):
+        with st.spinner("Analisi RE-WIRE in corso..."):
             try:
-                # Se c'è un'immagine, la passiamo insieme al testo
+                # Se c'è un'immagine, la inviamo insieme al prompt testuale
                 if img_obj:
-                    # Nota: usiamo generate_content che è il metodo standard
                     response = model.generate_content([prompt, img_obj])
                 else:
                     response = model.generate_content(prompt)
                 
-                res_text = response.text
-                st.markdown(res_text)
-                st.session_state.messages.append({"role": "assistant", "content": res_text})
+                # Visualizza e salva la risposta
+                st.markdown(response.text)
+                st.session_state.messages.append({"role": "assistant", "content": response.text})
             except Exception as e:
-                st.error(f"Errore: {e}")
-                st.info("Controlla che la chiave API sia attiva o prova a ricaricare.")
+                st.error(f"⚠️ Errore di connessione: {e}")
+                st.info("Assicurati di non aver superato i limiti della tua chiave API.")
