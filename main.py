@@ -73,21 +73,16 @@ def genera_report():
 # --- FUNZIONI DI GENERAZIONE (NUOVE) ---
 def genera_immagine(prompt_immagine):
     try:
-        openai_client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
-        response = openai_client.images.generate(
-            model="dall-e-3",
-            prompt=prompt_immagine,
-            size="1024x1024",
-            quality="standard",
-            n=1,
-        )
-        image_url = response.data[0].url
-        # Converti l'URL in base64 per visualizzarla direttamente (o usa l'URL se preferisci)
-        # Per semplicità, useremo l'URL temporaneo, ma puoi scaricarla e convertirla se serve persistenza
-        st.success("Immagine generata con successo!")
+        import urllib.parse
+        # Puliamo il prompt per renderlo leggibile dall'URL
+        prompt_pulito = urllib.parse.quote(prompt_immagine)
+        # Usiamo il server di Pollinations (Gratis e veloce)
+        image_url = f"https://image.pollinations.ai/prompt/{prompt_pulito}?width=1024&height=1024&nologo=true&seed=42"
+        
+        st.success("🎨 Immagine generata con successo (Servizio Free Attivo)")
         return image_url
     except Exception as e:
-        st.error(f"Errore nella generazione dell'immagine: {e}")
+        st.error(f"Errore nella generazione: {e}")
         return None
 
 def genera_template(prompt_template):
@@ -207,3 +202,4 @@ if prompt := st.chat_input("Scrivi qui la tua richiesta..."):
         resp = compl.choices[0].message.content
         st.markdown(resp)
         st.session_state.messages.append({"role": "assistant", "content": resp})
+
