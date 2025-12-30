@@ -6,7 +6,6 @@ from fpdf import FPDF
 # --- 1. CONFIGURAZIONE PAGINA ---
 st.set_page_config(page_title="RE-WIRE Business", layout="wide")
 
-# Inizializzazione sessione
 if "current_template" not in st.session_state:
     st.session_state.current_template = None
 
@@ -28,17 +27,21 @@ with st.sidebar:
     
     # SEZIONE CARICAMENTO
     st.subheader("📁 Carica Documenti")
-    uploaded_file = st.file_uploader("Carica file dal PC per l'analisi", type=["txt", "pdf", "docx"])
+    uploaded_file = st.file_uploader("Carica file .txt per l'analisi", type=["txt"])
+    
+    contenuto_file = ""
     if uploaded_file is not None:
-        st.success(f"File '{uploaded_file.name}' caricato!")
+        # Legge il contenuto del file caricato
+        stringio = io.StringIO(uploaded_file.getvalue().decode("utf-8"))
+        contenuto_file = stringio.read()
+        st.success(f"File '{uploaded_file.name}' pronto!")
 
     st.divider()
 
-    # SEZIONE ESPORTAZIONE (Visibile solo se c'è un risultato)
+    # SEZIONE ESPORTAZIONE
     if st.session_state.current_template:
         st.subheader("💾 Esporta Risultato")
         
-        # Download TXT
         st.download_button(
             label="📄 SCARICA TXT",
             data=st.session_state.current_template,
@@ -46,7 +49,6 @@ with st.sidebar:
             use_container_width=True
         )
         
-        # Download PDF
         try:
             pdf_data = crea_pdf(st.session_state.current_template)
             st.download_button(
@@ -61,37 +63,40 @@ with st.sidebar:
 
     st.divider()
 
-    # TASTO RESET
     if st.button("🗑️ CANCELLA TUTTO", use_container_width=True):
         st.session_state.current_template = None
         st.rerun()
 
 # --- 4. AREA DI LAVORO CENTRALE ---
 st.title("📈 RE-WIRE Business Brain")
-st.markdown("Inserisci i dati o usa i file caricati per generare la tua strategia.")
+st.markdown("Analisi strategica integrata con i tuoi documenti.")
 
 c_prompt = st.text_area(
-    "Descrizione progetto o istruzioni aggiuntive:", 
-    placeholder="Scrivi qui i dettagli del business o cosa vuoi analizzare...",
-    height=200
+    "Istruzioni aggiuntive o prompt:", 
+    placeholder="Inserisci qui gli obiettivi o chiedi di analizzare il file caricato...",
+    height=150
 )
 
-if st.button("📝 GENERA STRATEGIA PROFESSIONALE", use_container_width=True):
-    if c_prompt:
-        with st.spinner("L'AI sta analizzando i dati e scrivendo..."):
+if st.button("📝 GENERA ANALISI PROFESSIONALE", use_container_width=True):
+    if c_prompt or contenuto_file:
+        with st.spinner("Analisi in corso..."):
             try:
-                # Nota: In una versione avanzata potremmo leggere il contenuto di 'uploaded_file' 
-                # e aggiungerlo al prompt inviato a Groq.
+                # Unisce le istruzioni dell'utente al contenuto del file
+                prompt_completo = f"Contenuto del file caricato:\n{contenuto_file}\n\nIstruzioni utente:\n{c_prompt}"
+                
                 client = Groq(api_key=st.secrets["GROQ_API_KEY"])
                 res = client.chat.completions.create(
-                    messages=[{"role": "user", "content": f"Agisci come consulente senior. Crea un report e strategia per: {c_prompt}"}],
+                    messages=[{
+                        "role": "user", 
+                        "content": f"Agisci come consulente senior. Usa queste informazioni per creare una strategia business: {prompt_completo}"
+                    }],
                     model="llama-3.3-70b-versatile"
                 )
                 st.session_state.current_template = res.choices[0].message.content
             except:
                 st.error("Errore di connessione API.")
     else:
-        st.warning("Inserisci una descrizione.")
+        st.warning("Carica un file o scrivi qualcosa per iniziare.")
 
 st.divider()
 
