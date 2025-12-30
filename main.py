@@ -9,9 +9,9 @@ import fitz  # PyMuPDF
 GROQ_API_KEY = "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"
 client = Groq(api_key=GROQ_API_KEY)
 
-st.set_page_config(page_title="RE-WIRE AI Business", layout="wide", page_icon="🧠")
+st.set_page_config(page_title="RE-WIRE Business Vision", layout="wide", page_icon="🧠")
 
-# --- 2. LOGIN ---
+# --- 2. LOGIN (Password: rewire2026) ---
 if "auth" not in st.session_state: st.session_state.auth = False
 if not st.session_state.auth:
     st.title("🔐 Accesso RE-WIRE")
@@ -22,9 +22,17 @@ if not st.session_state.auth:
             st.rerun()
     st.stop()
 
-# --- 3. GESTIONE FILE E MEMORIA ---
-if "messages" not in st.session_state:
-    st.session_state.messages = []
+# --- 3. FUNZIONI TECNICHE ---
+@st.cache_data
+def get_available_vision_model():
+    """Chiede a Groq quali modelli Vision sono attivi ORA"""
+    try:
+        models = client.models.list()
+        # Cerca modelli che contengono 'vision' nel nome
+        vision_models = [m.id for m in models.data if "vision" in m.id]
+        return vision_models[0] if vision_models else "llama-3.2-11b-vision-preview"
+    except:
+        return "llama-3.2-11b-vision-preview"
 
 def process_file(uploaded_file):
     if uploaded_file.type == "application/pdf":
@@ -43,10 +51,15 @@ def encode_image(image):
 
 # --- 4. INTERFACCIA ---
 st.title("🧠 RE-WIRE Business Vision")
+active_model = get_available_vision_model()
+st.caption(f"Motore AI attivo: **{active_model}**")
+
+if "messages" not in st.session_state:
+    st.session_state.messages = []
 
 with st.sidebar:
     st.header("📁 Documenti")
-    file = st.file_uploader("Carica Foto o PDF", type=["jpg", "png", "jpeg", "pdf"])
+    file = st.file_uploader("Foto o PDF", type=["jpg", "png", "jpeg", "pdf"])
     if st.button("🗑️ Reset Chat"):
         st.session_state.messages = []
         st.rerun()
@@ -62,34 +75,23 @@ for msg in st.session_state.messages:
     with st.chat_message(msg["role"]):
         st.markdown(msg["content"])
 
-if prompt := st.chat_input("Fai una domanda..."):
+if prompt := st.chat_input("Chiedi all'AI..."):
     st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"):
         st.markdown(prompt)
 
     with st.chat_message("assistant"):
-        with st.spinner("Analisi in corso..."):
-            # Modelli Vision 2026 (nomi corretti)
-            modelli_vision = ["llama-3.2-11b-vision-instant", "llama-3.2-90b-vision-instant"]
+        try:
+            content = [{"type": "text", "text": prompt}]
+            if img_base64:
+                content.append({"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{img_base64}"}})
             
-            final_resp = None
-            logs = ""
-            
-            for m in modelli_vision:
-                try:
-                    content = [{"type": "text", "text": prompt}]
-                    if img_base64:
-                        content.append({"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{img_base64}"}})
-                    
-                    resp = client.chat.completions.create(model=m, messages=[{"role": "user", "content": content}])
-                    final_resp = resp.choices[0].message.content
-                    break
-                except Exception as e:
-                    logs += f"{m}: {str(e)}\n"
-            
-            if final_resp:
-                st.markdown(final_resp)
-                st.session_state.messages.append({"role": "assistant", "content": final_resp})
-            else:
-                st.error("Errore critico nei modelli.")
-                st.info(f"Dettagli: {logs}")
+            response = client.chat.completions.create(
+                model=active_model, 
+                messages=[{"role": "user", "content": content}]
+            )
+            full_res = response.choices[0].message.content
+            st.markdown(full_res)
+            st.session_state.messages.append({"role": "assistant", "content": full_res})
+        except Exception as e:
+            st.error(f"Errore tecnico: {e}")
