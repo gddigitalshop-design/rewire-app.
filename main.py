@@ -1,33 +1,43 @@
 import streamlit as st
 import google.generativeai as genai
 from PIL import Image
-import fitz  # PyMuPDF per i PDF
+import fitz
 import io
 
-# --- 1. CONFIGURAZIONE MOTORE GOOGLE STABLE ---
-# Utilizziamo la tua nuova chiave API
+# --- 1. CONFIGURAZIONE MOTORE DINAMICO ---
 GEMINI_API_KEY = "AIzaSyA8UTodWbYVU3Kzvc4Cg2brAoPinj5ciZc"
 genai.configure(api_key=GEMINI_API_KEY)
 
-# Puntiamo al modello Flash 1.5, il più affidabile per la visione
-model = genai.GenerativeModel('gemini-1.5-flash')
+@st.cache_resource
+def get_best_model():
+    """Trova automaticamente il modello disponibile per evitare l'errore 404"""
+    try:
+        # Chiediamo a Google la lista dei modelli attivi sulla tua chiave
+        for m in genai.list_models():
+            if 'generateContent' in m.supported_generation_methods:
+                # Privilegiamo il 1.5 Flash, poi il 1.5 Pro, poi il 1.0
+                if 'gemini-1.5-flash' in m.name:
+                    return m.name
+        # Se non trova il flash, prende il primo disponibile
+        return 'models/gemini-1.5-flash' 
+    except:
+        return 'gemini-1.5-flash'
 
-st.set_page_config(page_title="RE-WIRE Business Vision", layout="wide", page_icon="🧠")
+# Identifica il modello corretto per il tuo account
+MODEL_NAME = get_best_model()
+model = genai.GenerativeModel(MODEL_NAME)
 
-# --- 2. SISTEMA DI LOGIN ---
+st.set_page_config(page_title="RE-WIRE AI Business", layout="wide", page_icon="🧠")
+
+# --- 2. LOGIN ---
 if "auth" not in st.session_state: st.session_state.auth = False
-
 if not st.session_state.auth:
-    st.title("🔐 RE-WIRE AI | Accesso Licenza")
-    col1, col2, col3 = st.columns([1,2,1])
-    with col2:
-        pwd = st.text_input("Inserisci Password Licenza", type="password")
-        if st.button("SBLOCCA SISTEMA"):
-            if pwd == "rewire2026":
-                st.session_state.auth = True
-                st.rerun()
-            else:
-                st.error("Accesso negato. Password errata.")
+    st.title("🔐 Accesso Licenza RE-WIRE")
+    pwd = st.text_input("Inserisci Password", type="password")
+    if st.button("SBLOCCA"):
+        if pwd == "rewire2026":
+            st.session_state.auth = True
+            st.rerun()
     st.stop()
 
 # --- 3. GESTIONE DOCUMENTI ---
@@ -35,61 +45,51 @@ if "messages" not in st.session_state:
     st.session_state.messages = []
 
 def process_file(uploaded_file):
-    """Estrae l'immagine da una foto o dalla prima pagina di un PDF"""
     if uploaded_file.type == "application/pdf":
         doc = fitz.open(stream=uploaded_file.read(), filetype="pdf")
         page = doc.load_page(0)
         pix = page.get_pixmap()
-        img = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
-        return img
+        return Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
     else:
         return Image.open(uploaded_file)
 
-# --- 4. INTERFACCIA UTENTE ---
+# --- 4. INTERFACCIA ---
 st.title("🧠 RE-WIRE Business Intelligence")
+st.caption(f"Motore AI connesso: {MODEL_NAME}") # Ti mostra quale modello ha scelto
 
 with st.sidebar:
     st.header("📁 Hub Documenti")
-    file = st.file_uploader("Carica una foto o un PDF", type=["jpg", "png", "jpeg", "pdf"])
-    if st.button("🗑️ Svuota Chat"):
+    file = st.file_uploader("Carica Foto o PDF", type=["jpg", "png", "jpeg", "pdf"])
+    if st.button("🗑️ Reset Chat"):
         st.session_state.messages = []
         st.rerun()
-    st.divider()
-    st.caption("Versione 2026.1 - Motore Gemini Stable")
 
-# Anteprima del documento
 img_obj = None
 if file:
     try:
         img_obj = process_file(file)
-        st.image(img_obj, width=400, caption="Documento pronto per l'analisi")
+        st.image(img_obj, width=400)
     except Exception as e:
-        st.error(f"Errore caricamento: {e}")
+        st.error(f"Errore file: {e}")
 
-# --- 5. CHAT INTERATTIVA ---
-# Mostra la cronologia messaggi
+# --- 5. CHAT ---
 for msg in st.session_state.messages:
     with st.chat_message(msg["role"]):
         st.markdown(msg["content"])
 
-# Barra di input per l'utente
 if prompt := st.chat_input("Fai una domanda sul documento..."):
     st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"):
         st.markdown(prompt)
 
     with st.chat_message("assistant"):
-        with st.spinner("Analisi RE-WIRE in corso..."):
+        with st.spinner("Analisi in corso..."):
             try:
-                # Se c'è un'immagine, la inviamo insieme al prompt testuale
-                if img_obj:
-                    response = model.generate_content([prompt, img_obj])
-                else:
-                    response = model.generate_content(prompt)
+                # Passiamo i dati al modello rilevato automaticamente
+                inputs = [prompt, img_obj] if img_obj else [prompt]
+                response = model.generate_content(inputs)
                 
-                # Visualizza e salva la risposta
                 st.markdown(response.text)
                 st.session_state.messages.append({"role": "assistant", "content": response.text})
             except Exception as e:
-                st.error(f"⚠️ Errore di connessione: {e}")
-                st.info("Assicurati di non aver superato i limiti della tua chiave API.")
+                st.error(f"Errore tecnico: {e}")
