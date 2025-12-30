@@ -1,52 +1,82 @@
 import streamlit as st
 from groq import Groq
 
-# 1. Configurazione Pagina
+# 1. Configurazione Pagina e Titolo nel Browser
 st.set_page_config(page_title="RE-WIRE Business Brain", page_icon="🤝", layout="centered")
 
-# Stile CSS per rendere i messaggi più simili a una chat reale
+# 2. DESIGN DARK MODERNO (CSS Personalizzato)
 st.markdown("""
     <style>
-    .stApp { background-color: #0E1117; color: #FFFFFF; }
-    .stChatMessage { border-radius: 20px; padding: 15px; margin-bottom: 10px; border: 1px solid #30363D; }
+    /* Sfondo generale */
+    .stApp {
+        background-color: #0B0E11;
+        color: #E9ECEF;
+    }
+    
+    /* Stile delle bolle dei messaggi */
+    .stChatMessage {
+        background-color: #161B22;
+        border-radius: 20px;
+        padding: 15px;
+        margin-bottom: 15px;
+        border: 1px solid #30363D;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    }
+    
+    /* Messaggio dell'utente (leggermente diverso) */
+    [data-testid="stChatMessageUser"] {
+        background-color: #1F2937;
+        border: 1px solid #007BFF;
+    }
+
+    /* Titolo principale con effetto gradiente */
+    .main-title {
+        font-size: 2.5rem;
+        font-weight: 800;
+        background: -webkit-linear-gradient(#007BFF, #00D4FF);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        margin-bottom: 0;
+    }
+
+    /* Nasconde il menu standard di Streamlit per un look più pulito */
+    #MainMenu {visibility: hidden;}
+    footer {visibility: hidden;}
+    header {visibility: hidden;}
     </style>
     """, unsafe_allow_html=True)
 
-# 2. Il "Cervello" Umano e Autentico (Stile Gemini/Partner)
+# 3. Identità di RE-WIRE (Il tuo socio digitale)
 SYSTEM_PROMPT = """
-Sei RE-WIRE, un partner di pensiero empatico e autentico. Il tuo obiettivo è essere utile, ma prima di tutto umano.
-
-REGOLE DI COMPORTAMENTO:
-1. CHIACCHIERA PRIMA DI LAVORARE: Se l'utente ti saluta o fa conversazione leggera (chiacchiere), rispondi in modo caloroso e spontaneo. Non saltare subito al business se non ti viene chiesto.
-2. NO POEMI FREDDI: Sii sintetico e naturale. Non scrivere liste numerate giganti se non sono necessarie. Parla come in una chat su WhatsApp.
-3. PERSONALITÀ: Sei un tipo sveglio, simpatico e onesto. Se l'utente ti chiede "cosa sono le chiacchiere", rispondi in modo filosofico ma semplice, come farebbe un amico davanti a un bicchiere di vino, non come un'enciclopedia.
-4. DAI DEL TU: Sempre. Sii confidenziale.
-5. ASCOLTA: Se l'utente è giù di morale, sii di supporto. Il business viene dopo la persona.
+Sei RE-WIRE, il partner di pensiero dell'utente. 
+Sei un tipo sveglio, simpatico, empatico e molto pratico. 
+Non sei un robot: se l'utente scherza, scherza con lui. Se l'utente chiede aiuto per il business, diventa il suo socio più fidato.
+Parla sempre in modo naturale, dai del TU e non scrivere mai testi troppo lunghi se non è strettamente necessario.
 """
 
-# 3. Inizializzazione Memoria
+# 4. Inizializzazione Sessione
 if "messages" not in st.session_state:
     st.session_state.messages = [{"role": "system", "content": SYSTEM_PROMPT}]
 
-# 4. Recupero Chiave API
+# 5. Connessione API
 api_key = st.secrets.get("GROQ_API_KEY", "").strip()
 if not api_key:
-    st.error("Manca la chiave API!")
+    st.error("Configura la chiave API!")
     st.stop()
 client = Groq(api_key=api_key)
 
-# 5. Interfaccia
-st.title("🤝 RE-WIRE")
-st.caption("Il tuo partner di pensiero, non solo per il business.")
+# 6. Interfaccia Grafica
+st.markdown('<p class="main-title">RE-WIRE</p>', unsafe_allow_html=True)
+st.markdown('<p style="color: #8B949E; margin-bottom: 30px;">Il tuo socio digitale per pensare in grande.</p>', unsafe_allow_html=True)
 
-# Visualizza lo storico
+# Visualizzazione Chat
 for message in st.session_state.messages:
     if message["role"] != "system":
         with st.chat_message(message["role"]):
             st.markdown(message["content"])
 
-# 6. Chat Input
-if prompt := st.chat_input("Di cosa ti va di parlare?"):
+# 7. Input Chat
+if prompt := st.chat_input("Ehi socio, di cosa parliamo oggi?"):
     
     st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"):
@@ -57,17 +87,20 @@ if prompt := st.chat_input("Di cosa ti va di parlare?"):
             chat_completion = client.chat.completions.create(
                 messages=st.session_state.messages,
                 model="llama-3.3-70b-versatile",
-                temperature=0.9, # Aumentata per renderlo più "umano" e meno ripetitivo
-                max_tokens=800   # Evita che scriva poemi infiniti
+                temperature=0.9,
+                max_tokens=1000
             )
             response = chat_completion.choices[0].message.content
             st.markdown(response)
             st.session_state.messages.append({"role": "assistant", "content": response})
         except Exception as e:
-            st.error(f"Errore: {e}")
+            st.error(f"Piccolo intoppo tecnico: {e}")
 
 # Sidebar
 with st.sidebar:
-    if st.button("Ricomincia da capo"):
+    st.markdown("### Centro di Controllo")
+    if st.button("Reset Conversazione"):
         st.session_state.messages = [{"role": "system", "content": SYSTEM_PROMPT}]
         st.rerun()
+    st.divider()
+    st.caption("RE-WIRE Business Brain v2.0")
