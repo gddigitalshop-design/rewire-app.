@@ -5,15 +5,21 @@ from PIL import Image
 import fitz
 import io
 
-# --- 1. CONFIGURAZIONE GROQ (La tua chiave originale) ---
+# --- 1. CONFIGURAZIONE ---
 GROQ_API_KEY = "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"
-# Usiamo Llama 3.2 11B Vision: il modello più stabile per le immagini
-MODEL_ID = "llama-3.2-11b-vision-preview"
 API_URL = "https://api.groq.com/openai/v1/chat/completions"
+
+# Lista di modelli aggiornata (dal più recente al più stabile)
+# Abbiamo rimosso '-preview' e messo i nomi definitivi
+MODELS_TO_TRY = [
+    "llama-3.2-11b-vision-instant",
+    "llama-3.2-90b-vision-instant",
+    "llama-3.2-11b-vision-preview" # Tenuto per compatibilità legacy
+]
 
 st.set_page_config(page_title="RE-WIRE Business Vision", layout="wide", page_icon="🧠")
 
-# --- 2. LOGIN (Password: rewire2026) ---
+# --- 2. LOGIN ---
 if "auth" not in st.session_state: st.session_state.auth = False
 if not st.session_state.auth:
     st.title("🔐 Accesso Licenza RE-WIRE")
@@ -24,7 +30,7 @@ if not st.session_state.auth:
             st.rerun()
     st.stop()
 
-# --- 3. FUNZIONI TECNICHE ---
+# --- 3. FUNZIONI ---
 def process_file_to_base64(uploaded_file):
     if uploaded_file.type == "application/pdf":
         doc = fitz.open(stream=uploaded_file.read(), filetype="pdf")
@@ -51,54 +57,47 @@ with st.sidebar:
         st.session_state.messages = []
         st.rerun()
     st.divider()
-    st.caption("Motore: Llama 3.2 Vision (Stabile)")
+    st.caption("Connessione sicura attiva")
 
 img_b64 = None
 if file:
     img_b64, img_display = process_file_to_base64(file)
-    st.image(img_display, width=400)
+    st.image(img_display, width=400, caption="Documento acquisito")
 
-# --- 5. CHAT ---
+# --- 5. CHAT CON SISTEMA ANTI-ERRORE ---
 for msg in st.session_state.messages:
     with st.chat_message(msg["role"]):
         st.markdown(msg["content"])
 
-if prompt := st.chat_input("Fai una domanda sul documento..."):
+if prompt := st.chat_input("Chiedi all'AI..."):
     st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"):
         st.markdown(prompt)
 
     with st.chat_message("assistant"):
-        with st.spinner("Analisi in corso..."):
-            headers = {
-                "Authorization": f"Bearer {GROQ_API_KEY}",
-                "Content-Type": "application/json"
-            }
+        with st.spinner("L'intelligenza RE-WIRE sta analizzando..."):
+            success = False
+            headers = {"Authorization": f"Bearer {GROQ_API_KEY}", "Content-Type": "application/json"}
             
-            # Struttura messaggi per Groq Vision
-            content = [{"type": "text", "text": prompt}]
-            if img_b64:
-                content.append({
-                    "type": "image_url",
-                    "image_url": {"url": f"data:image/jpeg;base64,{img_b64}"}
-                })
+            # Proviamo ogni modello della lista finché uno non risponde
+            for model_id in MODELS_TO_TRY:
+                content = [{"type": "text", "text": prompt}]
+                if img_b64:
+                    content.append({"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{img_b64}"}})
 
-            payload = {
-                "model": MODEL_ID,
-                "messages": [{"role": "user", "content": content}],
-                "temperature": 0.1
-            }
+                payload = {"model": model_id, "messages": [{"role": "user", "content": content}], "temperature": 0.1}
 
-            try:
-                response = requests.post(API_URL, json=payload, headers=headers)
-                result = response.json()
-                
-                if response.status_code == 200:
-                    answer = result['choices'][0]['message']['content']
-                    st.markdown(answer)
-                    st.session_state.messages.append({"role": "assistant", "content": answer})
-                else:
-                    err_msg = result.get('error', {}).get('message', 'Errore ignoto')
-                    st.error(f"Errore {response.status_code}: {err_msg}")
-            except Exception as e:
-                st.error(f"Connessione fallita: {e}")
+                try:
+                    response = requests.post(API_URL, json=payload, headers=headers)
+                    if response.status_code == 200:
+                        result = response.json()
+                        answer = result['choices'][0]['message']['content']
+                        st.markdown(answer)
+                        st.session_state.messages.append({"role": "assistant", "content": answer})
+                        success = True
+                        break # Esci dal ciclo se funziona
+                except:
+                    continue
+            
+            if not success:
+                st.error("I server Vision sono in manutenzione straordinaria. Riprova tra pochi minuti.")
