@@ -1,4 +1,6 @@
+
 streamlit
 groq
 PyPDF2
-extra-streamlit-components
+gspread
+google-auth
