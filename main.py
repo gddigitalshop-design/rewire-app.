@@ -4,48 +4,24 @@ from PIL import Image
 import fitz
 import io
 
-# --- 1. CONFIGURAZIONE GOOGLE (FORZA VERSIONE STABILE) ---
+# --- 1. CONFIGURAZIONE ---
 GEMINI_API_KEY = "AIzaSyA8UTodWbYVU3Kzvc4Cg2brAoPinj5ciZc"
-
-# Configuriamo l'SDK per puntare alla versione di produzione 
 genai.configure(api_key=GEMINI_API_KEY)
 
-# Lista di modelli da provare in ordine di stabilità
-# Abbiamo aggiunto 'models/' davanti per conformità con le nuove direttive
-candidate_models = [
-    'gemini-1.5-flash',
-    'gemini-1.5-pro',
-    'gemini-pro-vision'
-]
+st.set_page_config(page_title="RE-WIRE AI Business", layout="wide", page_icon="🧠")
 
-@st.cache_resource
-def load_stable_model():
-    """Tenta di caricare il modello ignorando le versioni beta"""
-    for model_name in candidate_models:
-        try:
-            m = genai.GenerativeModel(model_name)
-            # Test rapido di connessione
-            return m
-        except:
-            continue
-    return genai.GenerativeModel('gemini-1.5-flash') # Default finale
-
-model = load_stable_model()
-
-st.set_page_config(page_title="RE-WIRE Business Vision", layout="wide", page_icon="🧠")
-
-# --- 2. LOGIN ---
+# --- 2. LOGIN (Password: rewire2026) ---
 if "auth" not in st.session_state: st.session_state.auth = False
 if not st.session_state.auth:
-    st.title("🔐 Accesso RE-WIRE")
-    pwd = st.text_input("Password Licenza", type="password")
-    if st.button("SBLOCCA"):
+    st.title("🔐 Accesso Licenza RE-WIRE")
+    pwd = st.text_input("Inserisci Password Licenza", type="password")
+    if st.button("SBLOCCA SISTEMA"):
         if pwd == "rewire2026":
             st.session_state.auth = True
             st.rerun()
     st.stop()
 
-# --- 3. GESTIONE DOCUMENTI ---
+# --- 3. FUNZIONI TECNICHE ---
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
@@ -60,10 +36,9 @@ def process_file(uploaded_file):
 
 # --- 4. INTERFACCIA ---
 st.title("🧠 RE-WIRE Business Intelligence")
-st.caption(f"Stato: Motore {model.model_name} collegato")
 
 with st.sidebar:
-    st.header("📁 Documenti")
+    st.header("📁 Hub Documenti")
     file = st.file_uploader("Carica Foto o PDF", type=["jpg", "png", "jpeg", "pdf"])
     if st.button("🗑️ Reset Chat"):
         st.session_state.messages = []
@@ -82,7 +57,7 @@ for msg in st.session_state.messages:
     with st.chat_message(msg["role"]):
         st.markdown(msg["content"])
 
-if prompt := st.chat_input("Chiedi all'AI..."):
+if prompt := st.chat_input("Fai una domanda sul documento..."):
     st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"):
         st.markdown(prompt)
@@ -90,14 +65,25 @@ if prompt := st.chat_input("Chiedi all'AI..."):
     with st.chat_message("assistant"):
         with st.spinner("Analisi in corso..."):
             try:
-                # La lista di input deve contenere l'immagine se presente
-                inputs = [prompt, img_obj] if img_obj else [prompt]
+                # FORZIAMO IL MODELLO ALL'INTERNO DELLA CHIAMATA
+                # Usiamo il nome corto senza 'models/' per evitare il 404
+                vision_model = genai.GenerativeModel('gemini-1.5-flash')
                 
-                # Chiamata alla versione stabile
-                response = model.generate_content(inputs)
+                if img_obj:
+                    # Se c'è l'immagine, usiamo la lista [testo, immagine]
+                    response = vision_model.generate_content([prompt, img_obj])
+                else:
+                    response = vision_model.generate_content(prompt)
                 
                 st.markdown(response.text)
                 st.session_state.messages.append({"role": "assistant", "content": response.text})
             except Exception as e:
-                st.error(f"Errore tecnico: {e}")
-                st.info("Consiglio: Se l'errore persiste, prova a rigenerare la chiave in Google AI Studio selezionando un progetto 'Pay-as-you-go' (anche se usi il piano gratuito).")
+                # SE FALLISCE, PROVIAMO IL MODELLO PRO (Backup estremo)
+                try:
+                    backup_model = genai.GenerativeModel('gemini-1.5-pro')
+                    response = backup_model.generate_content([prompt, img_obj] if img_obj else prompt)
+                    st.markdown(response.text)
+                    st.session_state.messages.append({"role": "assistant", "content": response.text})
+                except Exception as e2:
+                    st.error(f"Errore critico Google: {e2}")
+                    st.info("Nota per l'amministratore: Controlla che il piano 'Pay-as-you-go' sia attivo su Google AI Studio per abilitare i modelli Flash 1.5.")
