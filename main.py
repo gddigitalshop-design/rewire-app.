@@ -14,7 +14,8 @@ st.set_page_config(
     layout="wide"
 )
 
-GROQ_API_KEY =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
+GROQ_API_KEY = "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"
+
 API_URL = "https://api.groq.com/openai/v1/chat/completions"
 MODEL = "llama-3.3-70b-versatile"   # ✔ stabile + vision support
 
@@ -131,4 +132,5 @@ def groq_answer(prompt):
                 "content": (
                     "Sei REWIRE AI. Aiuti famiglie, bambini non vedenti, utenti con problemi quotidiani. "
                     "Rispondi con calma, preci
+
 
