@@ -8,7 +8,7 @@ GROQ_API_KEY = "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"
 MODEL_ID = "llama-3.1-8b-instant"
 API_URL = "https://api.groq.com/openai/v1/chat/completions"
 
-st.set_page_config(page_title="RE-WIRE Business AI", layout="wide", page_icon="🧠")
+st.set_page_config(page_title="RE-WIRE Auto-AI", layout="wide", page_icon="⚡")
 
 # --- LOGIN ---
 if "auth" not in st.session_state: st.session_state.auth = False
@@ -24,66 +24,69 @@ if not st.session_state.auth:
 # --- INIZIALIZZAZIONE ---
 if "messages" not in st.session_state: st.session_state.messages = []
 if "doc_text" not in st.session_state: st.session_state.doc_text = ""
+if "file_processed" not in st.session_state: st.session_state.file_processed = False
 
-# --- INTERFACCIA SIDEBAR ---
+# --- FUNZIONE ANALISI AUTOMATICA ---
+def auto_analyze(text):
+    headers = {"Authorization": f"Bearer {GROQ_API_KEY}"}
+    payload = {
+        "model": MODEL_ID,
+        "messages": [
+            {"role": "system", "content": "Sei un analista business. Fornisci un riassunto esecutivo puntato del documento."},
+            {"role": "user", "content": f"Analizza questo documento: {text}"}
+        ],
+        "temperature": 0.2
+    }
+    try:
+        response = requests.post(API_URL, json=payload, headers=headers)
+        return response.json()['choices'][0]['message']['content']
+    except:
+        return "Errore durante l'analisi automatica."
+
+# --- INTERFACCIA ---
+st.title("⚡ RE-WIRE Auto-Analysis System")
+
 with st.sidebar:
-    st.header("📁 Documenti")
-    file = st.file_uploader("Carica PDF", type=["pdf"])
-    if file:
-        doc = fitz.open(stream=file.read(), filetype="pdf")
-        # Estraiamo il testo e lo salviamo stabilmente
-        st.session_state.doc_text = "".join([page.get_text() for page in doc])[:4000]
-        st.success("Documento memorizzato!")
+    st.header("📁 Caricamento")
+    file = st.file_uploader("Trascina qui il PDF", type=["pdf"])
+    
+    if file and not st.session_state.file_processed:
+        with st.spinner("Analisi automatica in corso..."):
+            doc = fitz.open(stream=file.read(), filetype="pdf")
+            text = "".join([page.get_text() for page in doc])[:4000]
+            st.session_state.doc_text = text
+            
+            # Esegue l'analisi automatica
+            summary = auto_analyze(text)
+            st.session_state.messages.append({"role": "assistant", "content": f"✅ **Analisi Automatica Completata:**\n\n{summary}"})
+            st.session_state.file_processed = True
+            st.rerun()
 
-    st.divider()
-    if st.session_state.messages:
-        report = "--- REPORT RE-WIRE ---\n\n" + "\n\n".join([f"{m['role'].upper()}: {m['content']}" for m in st.session_state.messages])
-        st.download_button("📥 Scarica Report", data=report, file_name="analisi.txt")
-
-    if st.button("🗑️ Reset"):
+    if st.button("🗑️ Reset / Nuovo File"):
         st.session_state.messages = []
         st.session_state.doc_text = ""
+        st.session_state.file_processed = False
         st.rerun()
 
-# --- AREA CHAT ---
-st.title("🧠 RE-WIRE Chat")
-
+# --- CHAT AREA ---
 for message in st.session_state.messages:
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
 
-if prompt := st.chat_input("Fai una domanda sul file..."):
-    # 1. Registra domanda utente
+if prompt := st.chat_input("Fai una domanda specifica sul documento..."):
     st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"):
         st.markdown(prompt)
 
-    # 2. Genera risposta
     with st.chat_message("assistant"):
-        with st.spinner("Analisi in corso..."):
-            # COSTRUZIONE PROMPT INFALLIBILE
-            # Fondiamo il documento direttamente nell'ultimo messaggio dell'utente
-            document_context = f"CONTESTO DOCUMENTO CARICATO:\n{st.session_state.doc_text}\n\n---\n\nDOMANDA UTENTE: {prompt}"
-            
-            payload_messages = [
-                {"role": "system", "content": "Sei un analista business. Rispondi SEMPRE basandoti sul documento fornito sopra. Se il documento è vuoto, avvisa l'utente."},
-                {"role": "user", "content": document_context}
+        payload = {
+            "model": MODEL_ID,
+            "messages": [
+                {"role": "system", "content": f"Contesto documento: {st.session_state.doc_text}"},
+                {"role": "user", "content": prompt}
             ]
-
-            try:
-                response = requests.post(
-                    API_URL,
-                    json={"model": MODEL_ID, "messages": payload_messages, "temperature": 0.1},
-                    headers={"Authorization": f"Bearer {GROQ_API_KEY}"},
-                    timeout=15
-                )
-                
-                if response.status_code == 200:
-                    answer = response.json()['choices'][0]['message']['content']
-                    st.markdown(answer)
-                    st.session_state.messages.append({"role": "assistant", "content": answer})
-                    st.rerun()
-                else:
-                    st.error("Errore di sincronizzazione. Riprova.")
-            except Exception as e:
-                st.error(f"Connessione persa: {e}")
+        }
+        response = requests.post(API_URL, json=payload, headers={"Authorization": f"Bearer {GROQ_API_KEY}"})
+        answer = response.json()['choices'][0]['message']['content']
+        st.markdown(answer)
+        st.session_state.messages.append({"role": "assistant", "content": answer})
