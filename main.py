@@ -4,14 +4,29 @@ import base64
 from PIL import Image
 import io
 
-# --- CONFIGURAZIONE ---
-API_KEY = "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"
-MODELS_TO_TRY = ["llama-3.2-11b-vision-preview", "llama-3.2-90b-vision-instant", "llama-3.2-11b-vision-instant"]
+# ============================================
+#               CONFIG SICURA
+# ============================================
+# Inserisci la chiave in .streamlit/secrets.toml
+API_KEY = st.secrets.get("GROQ_API_KEY", None)
+
+if not API_KEY:
+    st.error("❌ API Key mancante in st.secrets! Aggiungila prima di procedere.")
+    st.stop()
+
+MODELS_TO_TRY = [
+    "llama-3.2-11b-vision-preview",
+    "llama-3.2-90b-vision-instant",
+    "llama-3.2-11b-vision-instant"
+]
+
 URL = "https://api.groq.com/openai/v1/chat/completions"
 
 st.set_page_config(page_title="RE-WIRE AI PRO", layout="wide")
 
-# --- LOGIN ---
+# ============================================
+#                 LOGIN
+# ============================================
 if "auth" not in st.session_state:
     st.session_state.auth = False
 
@@ -28,38 +43,54 @@ if not st.session_state.auth:
                 st.error("Accesso negato")
     st.stop()
 
-# --- LOGICA IMMAGINE ---
+# ============================================
+#              IMAGE HANDLING
+# ============================================
 def prepare_image(uploaded_file):
-    img = Image.open(uploaded_file).convert("RGB")
-    img.thumbnail((800, 800))
-    buf = io.BytesIO()
-    img.save(buf, format="JPEG")
-    return base64.b64encode(buf.getvalue()).decode('utf-8')
+    try:
+        img = Image.open(uploaded_file).convert("RGB")
+        img.thumbnail((768, 768))
+        buf = io.BytesIO()
+        img.save(buf, format="JPEG", quality=88)
+        return base64.b64encode(buf.getvalue()).decode("utf-8")
+    except Exception as e:
+        st.error(f"Errore nel processare l'immagine: {e}")
+        return None
 
-# --- MEMORIA ---
+# ============================================
+#              MEMORIA SESSIONE
+# ============================================
 if "chat" not in st.session_state:
     st.session_state.chat = []
 if "img" not in st.session_state:
     st.session_state.img = None
 
-# --- SIDEBAR ---
+# ============================================
+#                    SIDEBAR
+# ============================================
 with st.sidebar:
     st.title("⚡ DASHBOARD")
-    file = st.file_uploader("Carica Immagine", type=["jpg", "png", "jpeg"])
+
+    file = st.file_uploader("Carica Immagine", type=["jpg", "jpeg", "png"])
     if file:
         st.session_state.img = prepare_image(file)
         st.image(file, caption="Visione Attiva")
-    
+
     if st.button("RESET"):
-        st.session_state.chat = []
+        st.session_state.chat.clear()
         st.session_state.img = None
         st.rerun()
 
-# --- CHAT ---
+# ============================================
+#                   CHAT UI
+# ============================================
 for m in st.session_state.chat:
     with st.chat_message(m["role"]):
         st.markdown(m["content"])
 
+# ============================================
+#                   PROCESSO CHAT
+# ============================================
 if prompt := st.chat_input("Chiedi qualcosa..."):
     st.session_state.chat.append({"role": "user", "content": prompt})
     with st.chat_message("user"):
@@ -67,6 +98,7 @@ if prompt := st.chat_input("Chiedi qualcosa..."):
 
     with st.chat_message("assistant"):
         success = False
+
         for model in MODELS_TO_TRY:
             payload = {
                 "model": model,
@@ -78,6 +110,8 @@ if prompt := st.chat_input("Chiedi qualcosa..."):
                 }],
                 "temperature": 0.5
             }
+
+            # Inserimento immagine se esiste
             if st.session_state.img:
                 payload["messages"][0]["content"].append({
                     "type": "image_url",
@@ -85,15 +119,27 @@ if prompt := st.chat_input("Chiedi qualcosa..."):
                 })
 
             try:
-                r = requests.post(URL, headers={"Authorization": f"Bearer {API_KEY}"}, json=payload, timeout=10)
+                r = requests.post(
+                    URL,
+                    headers={"Authorization": f"Bearer {API_KEY}"},
+                    json=payload,
+                    timeout=20
+                )
+
                 if r.status_code == 200:
-                    ans = r.json()['choices'][0]['message']['content']
+                    ans = r.json()["choices"][0]["message"]["content"]
                     st.markdown(ans)
                     st.session_state.chat.append({"role": "assistant", "content": ans})
                     success = True
                     break
-            except:
-                continue
-        
+
+                else:
+                    st.write(f"⚠️ Modello {model} ha risposto con errore: {r.status_code}")
+
+            except requests.exceptions.Timeout:
+                st.write(f"⏳ Timeout per modello {model}, passo al prossimo...")
+            except Exception as e:
+                st.write(f"❌ Errore usando modello {model}: {e}")
+
         if not success:
-            st.error("Errore di connessione ai modelli Vision. Riprova.")
+            st.error("❌ Nessun modello Vision disponibile. Riprova più tardi.")
