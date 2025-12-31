@@ -123,4 +123,35 @@ st.title("🚀 Smart Workspace")
 # Mostra cronologia
 for message in st.session_state.messages:
     with st.chat_message(message["role"]):
-        st.markdown(
+        st.markdown(message["content"])
+
+# Gestione input
+if prompt := st.chat_input("In cosa posso aiutarti oggi?"):
+    
+    # Se è selezionato un template, modifica il prompt
+    if template == "Analisi Tecnica Immagine":
+        prompt = f"Esegui un'analisi tecnica dettagliata di questa immagine: {prompt}"
+    elif template == "Riassunto Documento":
+        prompt = f"Riassumi i punti chiave di questo contenuto: {prompt}"
+
+    # Visualizza messaggio utente
+    with st.chat_message("user"):
+        st.markdown(prompt)
+    st.session_state.messages.append({"role": "user", "content": prompt})
+
+    # Elaborazione
+    img_b64 = None
+    if uploaded_file and any(x in uploaded_file.name.lower() for x in ['jpg','png','jpeg']):
+        img_b64 = base64.b64encode(uploaded_file.getvalue()).decode()
+
+    with st.chat_message("assistant"):
+        with st.spinner("Rewire sta elaborando..."):
+            response = process_ai_response(prompt, img_b64)
+            st.markdown(response)
+    
+    st.session_state.messages.append({"role": "assistant", "content": response})
+
+# Download della chat
+if st.session_state.messages:
+    chat_history = "\n".join([f"{m['role'].upper()}: {m['content']}" for m in st.session_state.messages])
+    st.sidebar.download_button("💾 Esporta Chat", chat_history, file_name="sessione_rewire.txt")
