@@ -10,15 +10,20 @@ API_URL = "https://api.groq.com/openai/v1/chat/completions"
 
 st.set_page_config(page_title="RE-WIRE AI PRO", layout="wide", page_icon="⚡")
 
-# --- CSS: LOGICA E COERENZA VISIVA ---
+# --- CSS: PULIZIA TOTALE DASHBOARD ---
 st.markdown("""
     <style>
-    .stApp { background: radial-gradient(circle at top right, #1e2a4a, #0d1117); color: #e6edf3; }
-    .main-title { font-size: 50px !important; font-weight: 900 !important; background: linear-gradient(90deg, #00f2fe, #4facfe); -webkit-background-clip: text; -webkit-text-fill-color: transparent; text-align: center; }
-    .preview-box { border: 2px solid rgba(0, 242, 254, 0.3); border-radius: 15px; padding: 15px; background: rgba(0,0,0,0.4); }
-    .stButton > button { border-radius: 20px !important; font-weight: bold !important; width: 100%; transition: 0.3s; }
-    .save-btn > div > button { background: linear-gradient(45deg, #28a745, #85e085) !important; color: white !important; }
-    .load-btn > div > button { background: linear-gradient(45deg, #ffc107, #ffdb4d) !important; color: #212529 !important; }
+    .stApp { background: #0d1117; color: #e6edf3; }
+    .main-title { font-size: 45px !important; font-weight: 800; background: linear-gradient(90deg, #00f2fe, #4facfe); -webkit-background-clip: text; -webkit-text-fill-color: transparent; text-align: center; }
+    section[data-testid="stSidebar"] { background-color: #161b22 !important; border-right: 1px solid #30363d; }
+    
+    /* Nasconde i testi standard del caricatore per pulizia */
+    .stFileUploader label { display: none; }
+    .stFileUploader section > div { display: none; }
+    .stFileUploader section::before { content: "📂 TRASCINA QUI (FOTO, PDF o SESSIONE)"; color: #4facfe; font-weight: bold; }
+    
+    .img-container { border: 2px solid #4facfe; border-radius: 15px; overflow: hidden; background: black; box-shadow: 0 10px 30px rgba(0,0,0,0.5); margin-bottom: 20px; }
+    .stButton > button { border-radius: 12px !important; background: linear-gradient(45deg, #4facfe, #00f2fe) !important; color: #0d1117 !important; font-weight: bold !important; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -29,96 +34,82 @@ if not st.session_state.auth:
     with col:
         st.markdown("<h1 class='main-title'>⚡ RE-WIRE</h1>", unsafe_allow_html=True)
         pwd = st.text_input("Chiave Accesso:", type="password")
-        if st.button("ACCEDI"):
+        if st.button("SBLOCCA"):
             if pwd == "rewire2026": st.session_state.auth = True; st.rerun()
     st.stop()
 
-# --- GESTIONE MEMORIA (SAVE/LOAD) ---
+# --- INIT SESSION ---
 if "messages" not in st.session_state: st.session_state.messages = []
 if "doc_text" not in st.session_state: st.session_state.doc_text = ""
 if "current_file" not in st.session_state: st.session_state.current_file = None
 
-def save_work():
-    data = {
-        "messages": st.session_state.messages,
-        "doc_text": st.session_state.doc_text,
-        "current_file_name": st.session_state.current_file['name'] if st.session_state.current_file else None
-    }
-    return json.dumps(data)
-
-# --- SIDEBAR: CONTROLLI AVANZATI ---
+# --- SIDEBAR UNIFICATA ---
 with st.sidebar:
-    st.markdown("<h2 style='color: #4facfe;'>⚡ DASHBOARD</h2>", unsafe_allow_html=True)
+    st.markdown("<h1 style='color:#4facfe; font-size:24px; text-align:center;'>⚡ DASHBOARD</h1>", unsafe_allow_html=True)
+    st.markdown("---")
     
-    # SEZIONE SALVATAGGIO
-    st.markdown("### 💾 Memoria Lavoro")
-    col_s, col_l = st.columns(2)
-    with col_s:
-        st.markdown('<div class="save-btn">', unsafe_allow_html=True)
-        st.download_button("SALVA", save_work(), file_name="sessione_rewire.json", help="Scarica il lavoro per riprenderlo dopo")
-        st.markdown('</div>', unsafe_allow_html=True)
-    with col_l:
-        st.markdown('<div class="load-btn">', unsafe_allow_html=True)
-        uploaded_session = st.file_uploader("CARICA", type=["json"], label_visibility="collapsed")
-        if uploaded_session:
-            session_data = json.load(uploaded_session)
-            st.session_state.messages = session_data["messages"]
-            st.session_state.doc_text = session_data["doc_text"]
-            st.success("Sessione Ripristinata!")
-            st.rerun()
-        st.markdown('</div>', unsafe_allow_html=True)
+    # UNICO CARICATORE INTELLIGENTE
+    uploaded = st.file_uploader("Upload", type=["json", "pdf", "jpg", "png", "jpeg"])
+    
+    if uploaded:
+        if uploaded.type == "application/json":
+            data = json.load(uploaded)
+            st.session_state.messages = data.get("messages", [])
+            st.session_state.doc_text = data.get("doc_text", "")
+            st.success("✅ Lavoro Ripristinato")
+        else:
+            if "last_fn" not in st.session_state or st.session_state.last_fn != uploaded.name:
+                st.session_state.last_fn = uploaded.name
+                if uploaded.type == "application/pdf":
+                    doc = fitz.open(stream=uploaded.read(), filetype="pdf")
+                    st.session_state.doc_text = "".join([p.get_text() for p in doc])[:8000]
+                    st.session_state.current_file = {"type": "pdf", "name": uploaded.name}
+                else:
+                    st.session_state.current_file = {"type": "img", "data": uploaded.read(), "name": uploaded.name}
+                    st.session_state.doc_text = f"Analisi visiva: {uploaded.name}"
+                st.rerun()
 
     st.markdown("---")
-    uploaded_file = st.file_uploader("📂 Carica Documento/Immagine", type=["pdf", "jpg", "png", "jpeg"])
-    if uploaded_file:
-        if "last_fn" not in st.session_state or st.session_state.last_fn != uploaded_file.name:
-            file_bytes = uploaded_file.read()
-            if uploaded_file.type == "application/pdf":
-                doc = fitz.open(stream=file_bytes, filetype="pdf")
-                st.session_state.doc_text = "".join([p.get_text() for p in doc])[:8000]
-                st.session_state.current_file = {"name": uploaded_file.name, "type": "pdf", "data": st.session_state.doc_text}
-            else:
-                st.session_state.doc_text = f"ANALISI VISIVA RICHIESTA PER: {uploaded_file.name}"
-                st.session_state.current_file = {"name": uploaded_file.name, "type": "img", "data": file_bytes}
-            st.rerun()
+    mode = st.radio("🎯 AMBIENTE", ["🏠 Famiglia", "💼 Business", "🔬 Specialista"])
+    
+    # SALVATAGGIO RAPIDO
+    if st.session_state.messages:
+        session_json = json.dumps({"messages": st.session_state.messages, "doc_text": st.session_state.doc_text})
+        st.download_button("📥 SALVA LAVORO CORRENTE", session_json, file_name="sessione_rewire.json")
 
-    mode = st.radio("🎯 Ambiente:", ["🏠 Famiglia", "💼 Business", "🔬 Specialista"])
-    if st.button("🗑️ RESET"):
-        st.session_state.messages = []
-        st.session_state.doc_text = ""
-        st.session_state.current_file = None
+    if st.button("🗑️ RESET TOTALE"):
+        st.session_state.clear()
+        st.session_state.auth = True
         st.rerun()
 
 # --- AREA DI LAVORO ---
 if st.session_state.current_file:
-    c1, c2 = st.columns([1, 1])
-    with c1:
-        st.markdown('<div class="preview-box">', unsafe_allow_html=True)
-        if st.session_state.current_file['type'] == "img":
-            st.image(st.session_state.current_file['data'], use_container_width=True)
+    col_a, col_b = st.columns([1, 1])
+    with col_a:
+        st.markdown('<div class="img-container">', unsafe_allow_html=True)
+        if st.session_state.current_file["type"] == "img":
+            st.image(st.session_state.current_file["data"])
         else:
-            st.text_area("Contenuto PDF:", st.session_state.doc_text, height=300)
+            st.info(f"PDF Attivo: {st.session_state.current_file['name']}")
         st.markdown('</div>', unsafe_allow_html=True)
-    with c2:
-        st.markdown("### 🔍 Analisi in tempo reale")
-        st.info(f"Modalità {mode} attiva. L'AI sta analizzando l'immagine sopra ignorando i nomi dei file fuorvianti.")
+    with col_b:
+        st.markdown(f"### 📋 Analisi {mode}")
+        st.write("L'AI è pronta. Usa la chat sotto per approfondire il contenuto.")
 
-# --- CHAT CON LOGICA ANTI-ERRORE ---
+# --- CHAT ---
 for m in st.session_state.messages:
     with st.chat_message(m["role"]): st.markdown(m["content"])
 
-if prompt := st.chat_input("Esegui un comando logico..."):
+if prompt := st.chat_input("Inserisci comando o analisi..."):
     st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"): st.markdown(prompt)
     
     with st.chat_message("assistant"):
-        # ISTRUZIONE BLOCCATA PER LA COERENZA
-        sys_msg = f"""Sei RE-WIRE AI ({mode}). 
-        REGOLA D'ORO: Non farti ingannare dal nome del file (es. 'CAP' non è un cappello, è 'Capitolo'). 
-        Analizza l'immagine o il testo basandoti sui fatti visibili: {st.session_state.doc_text}.
-        Sii fluido, usa tabelle se necessario, e mantieni una logica ferrea."""
-        
-        r = requests.post(API_URL, json={"model": MODEL_ID, "messages": [{"role": "system", "content": sys_msg}, {"role": "user", "content": prompt}]}, headers={"Authorization": f"Bearer {GROQ_API_KEY}"})
+        # LOGICA RIGIDA ANTI-ERRORE
+        context = f"Sei RE-WIRE AI ({mode}). Ignora nomi file come 'CAP' (non sono cappelli). Analizza basandoti su: {st.session_state.doc_text}"
+        r = requests.post(API_URL, 
+            json={"model": MODEL_ID, "messages": [{"role": "system", "content": context}, {"role": "user", "content": prompt}]}, 
+            headers={"Authorization": f"Bearer {GROQ_API_KEY}"})
         ans = r.json()['choices'][0]['message']['content']
         st.markdown(ans)
         st.session_state.messages.append({"role": "assistant", "content": ans})
