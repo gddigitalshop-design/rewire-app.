@@ -17,7 +17,7 @@ st.set_page_config(page_title="RE-WIRE AI", layout="wide")
 
 
 # -------------------------------------------------------
-#            FUNZIONE PREPARAZIONE IMMAGINE
+#         FUNZIONE PER PREPARARE L’IMMAGINE
 # -------------------------------------------------------
 def prepare_image(uploaded_file):
     img = Image.open(uploaded_file).convert("RGB")
@@ -28,7 +28,7 @@ def prepare_image(uploaded_file):
 
 
 # -------------------------------------------------------
-#                  GESTIONE SESSIONE
+#               INIZIALIZZAZIONE SESSIONE
 # -------------------------------------------------------
 if "chat" not in st.session_state:
     st.session_state.chat = []
@@ -37,46 +37,47 @@ if "img" not in st.session_state:
     st.session_state.img = None
 
 if "project_name" not in st.session_state:
-    st.session_state.project_name = None
+    st.session_state.project_name = ""
 
 
 # -------------------------------------------------------
-#                    INTERFACCIA SUPERIORE
+#                   TESTATA GRAFICA
 # -------------------------------------------------------
 st.markdown(
     "<h1 style='text-align:center; color:#6A5ACD;'>⚡ RE-WIRE AI</h1>",
-    unsafe_allow_html=True,
+    unsafe_allow_html=True
 )
 
 st.markdown(
-    "<p style='text-align:center; font-size:18px; color:#555;'>L’assistente che ti aiuta, ti guida e ti risolve i problemi.</p>",
-    unsafe_allow_html=True,
+    "<p style='text-align:center; font-size:18px; color:#666;'>La tua AI che descrive immagini, crea piani, organizza la vita e risolve problemi.</p>",
+    unsafe_allow_html=True
 )
 
 st.write("---")
 
 
 # -------------------------------------------------------
-#                   SIDEBAR
+#                     SIDEBAR
 # -------------------------------------------------------
 with st.sidebar:
-    st.header("📁 Progetto")
+    st.header("📁 Gestione Progetto")
 
-    project = st.text_input("Nome progetto", value=st.session_state.project_name or "")
+    st.session_state.project_name = st.text_input("Nome progetto", value=st.session_state.project_name)
 
     if st.button("💾 Salva progetto"):
-        if project.strip() != "":
-            st.session_state.project_name = project
-            with open(f"{project}.json", "w", encoding="utf-8") as f:
-                json.dump({
-                    "chat": st.session_state.chat,
-                    "img": st.session_state.img
-                }, f, ensure_ascii=False)
+        if st.session_state.project_name.strip() != "":
+            data = {
+                "chat": st.session_state.chat,
+                "img": st.session_state.img
+            }
+            with open(f"{st.session_state.project_name}.json", "w", encoding="utf-8") as f:
+                json.dump(data, f, ensure_ascii=False)
             st.success("Progetto salvato!")
 
     if st.button("📂 Carica progetto"):
-        if project.strip() != "" and os.path.exists(f"{project}.json"):
-            with open(f"{project}.json", "r", encoding="utf-8") as f:
+        filename = f"{st.session_state.project_name}.json"
+        if os.path.exists(filename):
+            with open(filename, "r", encoding="utf-8") as f:
                 data = json.load(f)
                 st.session_state.chat = data.get("chat", [])
                 st.session_state.img = data.get("img", None)
@@ -87,7 +88,8 @@ with st.sidebar:
 
     st.write("---")
 
-    st.header("🖼 Immagine")
+    # Upload immagine
+    st.header("🖼 Analisi Immagine")
     file = st.file_uploader("Carica immagine", type=["jpg", "jpeg", "png"])
     if file:
         st.session_state.img = prepare_image(file)
@@ -95,5 +97,95 @@ with st.sidebar:
 
     st.write("---")
 
+    # Reset chat
     if st.button("🔄 Reset Chat"):
-        st.session_state.chat =_
+        st.session_state.chat = []
+        st.session_state.img = None
+        st.experimental_rerun()
+
+
+# -------------------------------------------------------
+#                TEMPLATES RAPIDI
+# -------------------------------------------------------
+st.subheader("📌 Template veloci")
+
+c1, c2, c3, c4, c5 = st.columns(5)
+
+if c1.button("👪 Famiglia"):
+    st.session_state.chat.append({"role": "user", "content": "Fammi un piano settimanale per la famiglia."})
+    st.experimental_rerun()
+
+if c2.button("💼 Lavoro"):
+    st.session_state.chat.append({"role": "user", "content": "Organizza il mio lavoro giornaliero."})
+    st.experimental_rerun()
+
+if c3.button("🎨 Hobby"):
+    st.session_state.chat.append({"role": "user", "content": "Suggeriscimi qualche idea per un nuovo hobby creativo."})
+    st.experimental_rerun()
+
+if c4.button("🥗 Dieta"):
+    st.session_state.chat.append({"role": "user", "content": "Crea un piano alimentare settimanale sano e vario."})
+    st.experimental_rerun()
+
+if c5.button("❓ Problemi"):
+    st.session_state.chat.append({"role": "user", "content": "Aiutami a risolvere un problema quotidiano."})
+    st.experimental_rerun()
+
+
+st.write("---")
+
+
+# -------------------------------------------------------
+#                  CHAT ESISTENTE
+# -------------------------------------------------------
+for msg in st.session_state.chat:
+    with st.chat_message(msg["role"]):
+        st.write(msg["content"])
+
+
+# -------------------------------------------------------
+#                 NUOVO MESSAGGIO
+# -------------------------------------------------------
+prompt = st.chat_input("Scrivi qui il tuo messaggio...")
+
+if prompt:
+    st.session_state.chat.append({"role": "user", "content": prompt})
+
+    with st.chat_message("assistant"):
+        try:
+            # Contenuto del messaggio
+            content_block = [{"type": "text", "text": prompt}]
+
+            # Se esiste immagine -> allega
+            if st.session_state.img:
+                content_block.append({
+                    "type": "image_url",
+                    "image_url": {
+                        "url": f"data:image/jpeg;base64,{st.session_state.img}"
+                    }
+                })
+
+            payload = {
+                "model": MODEL,
+                "messages": [{
+                    "role": "user",
+                    "content": content_block
+                }],
+                "temperature": 0.4
+            }
+
+            r = requests.post(
+                URL,
+                headers={"Authorization": f"Bearer {API_KEY}"},
+                json=payload,
+                timeout=15
+            )
+
+            if r.status_code != 200:
+                st.error(f"Errore modello: {r.status_code}")
+            else:
+                ans = r.json()["choices"][0]["message"]["content"]
+                st.write(ans)
+                st.session_state.chat.append({"role": "assistant", "content": ans})
+
+        except Exception as e:
