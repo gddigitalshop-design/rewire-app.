@@ -8,7 +8,7 @@ GROQ_API_KEY = "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"
 MODEL_ID = "llama-3.1-8b-instant"
 API_URL = "https://api.groq.com/openai/v1/chat/completions"
 
-st.set_page_config(page_title="RE-WIRE Business AI", layout="wide", page_icon="📄")
+st.set_page_config(page_title="RE-WIRE Business AI", layout="wide", page_icon="🧠")
 
 # --- LOGIN ---
 if "auth" not in st.session_state: st.session_state.auth = False
@@ -25,74 +25,65 @@ if not st.session_state.auth:
 if "messages" not in st.session_state: st.session_state.messages = []
 if "doc_text" not in st.session_state: st.session_state.doc_text = ""
 
-# --- FUNZIONE SALVATAGGIO ---
-def prepare_report():
-    report = "--- REPORT ANALISI RE-WIRE ---\n\n"
-    for msg in st.session_state.messages:
-        role = "CLIENTE" if msg["role"] == "user" else "AI RE-WIRE"
-        report += f"{role}: {msg['content']}\n\n"
-    return report
-
-# --- INTERFACCIA ---
-st.title("🧠 RE-WIRE Business Intelligence")
-
+# --- INTERFACCIA SIDEBAR ---
 with st.sidebar:
-    st.header("📁 Gestione Documenti")
+    st.header("📁 Documenti")
     file = st.file_uploader("Carica PDF", type=["pdf"])
     if file:
         doc = fitz.open(stream=file.read(), filetype="pdf")
-        st.session_state.doc_text = "".join([page.get_text() for page in doc])[:3000]
-        st.success("Documento letto con successo.")
+        # Estraiamo il testo e lo salviamo stabilmente
+        st.session_state.doc_text = "".join([page.get_text() for page in doc])[:4000]
+        st.success("Documento memorizzato!")
 
     st.divider()
-    st.header("💾 Esportazione")
-    
     if st.session_state.messages:
-        # Pulsante di Download per il Report
-        report_data = prepare_report()
-        st.download_button(
-            label="📥 SCARICA REPORT (TXT)",
-            data=report_data,
-            file_name="Analisi_RE-WIRE.txt",
-            mime="text/plain"
-        )
-    else:
-        st.info("Inizia una chat per generare un report scaricabile.")
+        report = "--- REPORT RE-WIRE ---\n\n" + "\n\n".join([f"{m['role'].upper()}: {m['content']}" for m in st.session_state.messages])
+        st.download_button("📥 Scarica Report", data=report, file_name="analisi.txt")
 
-    if st.button("🗑️ Reset Totale"):
+    if st.button("🗑️ Reset"):
         st.session_state.messages = []
         st.session_state.doc_text = ""
         st.rerun()
 
-# --- CHAT ---
+# --- AREA CHAT ---
+st.title("🧠 RE-WIRE Chat")
+
 for message in st.session_state.messages:
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
 
-if prompt := st.chat_input("Fai una domanda..."):
+if prompt := st.chat_input("Fai una domanda sul file..."):
+    # 1. Registra domanda utente
     st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"):
         st.markdown(prompt)
 
+    # 2. Genera risposta
     with st.chat_message("assistant"):
-        with st.spinner("Analisi..."):
-            messages_payload = [{"role": "system", "content": f"Usa queste info: {st.session_state.doc_text}"}]
-            for m in st.session_state.messages[-2:]:
-                messages_payload.append(m)
+        with st.spinner("Analisi in corso..."):
+            # COSTRUZIONE PROMPT INFALLIBILE
+            # Fondiamo il documento direttamente nell'ultimo messaggio dell'utente
+            document_context = f"CONTESTO DOCUMENTO CARICATO:\n{st.session_state.doc_text}\n\n---\n\nDOMANDA UTENTE: {prompt}"
+            
+            payload_messages = [
+                {"role": "system", "content": "Sei un analista business. Rispondi SEMPRE basandoti sul documento fornito sopra. Se il documento è vuoto, avvisa l'utente."},
+                {"role": "user", "content": document_context}
+            ]
 
             try:
                 response = requests.post(
-                    API_URL, 
-                    json={"model": MODEL_ID, "messages": messages_payload, "temperature": 0.1},
+                    API_URL,
+                    json={"model": MODEL_ID, "messages": payload_messages, "temperature": 0.1},
                     headers={"Authorization": f"Bearer {GROQ_API_KEY}"},
                     timeout=15
                 )
+                
                 if response.status_code == 200:
                     answer = response.json()['choices'][0]['message']['content']
                     st.markdown(answer)
                     st.session_state.messages.append({"role": "assistant", "content": answer})
-                    st.rerun() # Forza il refresh per attivare il pulsante download
+                    st.rerun()
                 else:
-                    st.error(f"Errore API {response.status_code}")
+                    st.error("Errore di sincronizzazione. Riprova.")
             except Exception as e:
-                st.error(f"Errore: {e}")
+                st.error(f"Connessione persa: {e}")
