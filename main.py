@@ -1,17 +1,15 @@
 import streamlit as st
 import requests
 import fitz  # PyMuPDF
-from PIL import Image
-import io
 
-# --- 1. CONFIGURAZIONE ---
+# --- CONFIGURAZIONE ---
 GROQ_API_KEY = "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"
 MODEL_ID = "llama-3.1-8b-instant"
 API_URL = "https://api.groq.com/openai/v1/chat/completions"
 
-st.set_page_config(page_title="RE-WIRE Business Chat", layout="wide", page_icon="🧠")
+st.set_page_config(page_title="RE-WIRE Business Chat", layout="wide")
 
-# --- 2. LOGIN ---
+# --- LOGIN ---
 if "auth" not in st.session_state: st.session_state.auth = False
 if not st.session_state.auth:
     st.title("🔐 Accesso Licenza RE-WIRE")
@@ -22,86 +20,67 @@ if not st.session_state.auth:
             st.rerun()
     st.stop()
 
-# --- 3. INIZIALIZZAZIONE ---
-if "messages" not in st.session_state:
-    st.session_state.messages = []
-if "doc_text" not in st.session_state:
-    st.session_state.doc_text = ""
+# --- MEMORIA ---
+if "messages" not in st.session_state: st.session_state.messages = []
+if "doc_text" not in st.session_state: st.session_state.doc_text = ""
 
-# --- 4. FUNZIONE LETTURA PDF ---
+# --- FUNZIONE LETTURA PDF (OTTIMIZZATA) ---
 def get_content(uploaded_file):
     try:
-        if uploaded_file.type == "application/pdf":
-            doc = fitz.open(stream=uploaded_file.read(), filetype="pdf")
-            full_text = "".join([page.get_text() for page in doc])
-            return full_text[:7000] # Taglio di sicurezza per i token
-        else:
-            return "" # Per ora le immagini passano come vuote senza OCR
-    except:
-        return ""
+        doc = fitz.open(stream=uploaded_file.read(), filetype="pdf")
+        # Estraiamo solo i primi 5000 caratteri (circa 1200 token) per stare larghi nel limite
+        return "".join([page.get_text() for page in doc])[:5000]
+    except Exception as e:
+        return f"Errore lettura: {e}"
 
-# --- 5. INTERFACCIA ---
-st.title("🧠 RE-WIRE Interactive Intelligence")
+# --- INTERFACCIA ---
+st.title("🧠 RE-WIRE Business Intelligence")
 
 with st.sidebar:
-    st.header("📁 Documento Corrente")
+    st.header("📁 Documento")
     file = st.file_uploader("Carica PDF", type=["pdf"])
-    
     if file:
-        new_text = get_content(file)
-        if new_text != st.session_state.doc_text:
-            st.session_state.doc_text = new_text
-            st.session_state.messages = [] # Reset chat se cambi documento
-            st.success("Nuovo documento caricato!")
-
-    if st.button("🗑️ Svuota Chat"):
+        st.session_state.doc_text = get_content(file)
+        st.success("Documento pronto.")
+    if st.button("🗑️ Reset Chat"):
         st.session_state.messages = []
         st.rerun()
 
-# --- 6. LOGICA CHAT ---
-# Visualizzazione storica
+# Mostra Chat
 for message in st.session_state.messages:
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
 
-# Input Utente
-if prompt := st.chat_input("Fai una domanda sul file..."):
+# Input Chat
+if prompt := st.chat_input("Chiedi all'AI..."):
     st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"):
         st.markdown(prompt)
 
     with st.chat_message("assistant"):
-        with st.spinner("Analisi in corso..."):
-            headers = {
-                "Authorization": f"Bearer {GROQ_API_KEY}",
-                "Content-Type": "application/json"
-            }
-            
-            # TRUCCO: Il System Prompt contiene SEMPRE il documento
+        with st.spinner("Analisi..."):
+            # Costruiamo il payload con gestione errori avanzata
             messages_payload = [
-                {
-                    "role": "system", 
-                    "content": f"Sei un assistente AI professionale. Il contenuto del documento su cui devi rispondere è il seguente: {st.session_state.doc_text}. Se il documento è vuoto, chiedi all'utente di caricarne uno."
-                }
+                {"role": "system", "content": f"Sei un assistente business. Usa queste info: {st.session_state.doc_text}"},
             ]
-            
-            # Aggiungiamo la cronologia (ultimi 6 messaggi)
-            for m in st.session_state.messages[-6:]:
+            # Aggiungiamo solo gli ultimi 4 messaggi per risparmiare spazio
+            for m in st.session_state.messages[-4:]:
                 messages_payload.append(m)
 
-            payload = {
-                "model": MODEL_ID,
-                "messages": messages_payload,
-                "temperature": 0.3
-            }
-
             try:
-                response = requests.post(API_URL, json=payload, headers=headers)
+                response = requests.post(
+                    API_URL, 
+                    json={"model": MODEL_ID, "messages": messages_payload, "temperature": 0.2},
+                    headers={"Authorization": f"Bearer {GROQ_API_KEY}", "Content-Type": "application/json"},
+                    timeout=10 # Evita che l'app resti appesa
+                )
+                
                 if response.status_code == 200:
                     answer = response.json()['choices'][0]['message']['content']
                     st.markdown(answer)
                     st.session_state.messages.append({"role": "assistant", "content": answer})
                 else:
-                    st.error("Errore di connessione API.")
+                    # QUI LEGGERAI IL VERO ERRORE
+                    st.error(f"Errore API {response.status_code}: {response.text}")
             except Exception as e:
-                st.error(f"Errore: {e}")
+                st.error(f"Errore di rete: {e}")
