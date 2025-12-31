@@ -2,27 +2,34 @@ import streamlit as st
 import google.generativeai as genai
 from PIL import Image
 
-# Configurazione
-genai.configure(api_key="AIzaSyA8UTodWbYVU3Kzvc4Cg2brAoPinj5ciZc")
+# Configurazione API
+API_KEY = "AIzaSyA8UTodWbYVU3Kzvc4Cg2brAoPinj5ciZc"
+genai.configure(api_key=API_KEY)
 
-# Invece di scrivere il nome, chiediamo a Google quali modelli HAI ATTIVI
-try:
-    models = [m.name for m in genai.list_models() if 'generateContent' in m.supported_generation_methods]
-    # Scegliamo il primo della lista che Google ci dà come "buono"
-    model_to_use = models[0] if models else "gemini-1.5-flash"
-except:
-    model_to_use = "gemini-1.5-flash"
+st.title("🧠 RE-WIRE Business AI")
 
-model = genai.GenerativeModel(model_to_use)
+# Login rapido
+if "auth" not in st.session_state: st.session_state.auth = False
+if not st.session_state.auth:
+    pwd = st.text_input("Password", type="password")
+    if st.button("Accedi"):
+        if pwd == "rewire2026":
+            st.session_state.auth = True
+            st.rerun()
+    st.stop()
 
-st.title("RE-WIRE AI - Test Finale")
-st.write(f"Modello rilevato: {model_to_use}")
+# Caricamento e Analisi
+file = st.file_uploader("Carica un documento (Immagine)", type=["jpg", "png", "jpeg"])
 
-file = st.file_uploader("Carica immagine")
-if file and st.button("Analizza"):
+if file:
     img = Image.open(file)
-    try:
-        response = model.generate_content(["Cosa vedi?", img])
-        st.success(response.text)
-    except Exception as e:
-        st.error(f"Ancora errore: {e}")
+    st.image(img, width=300)
+    
+    if st.button("Analizza Documento"):
+        try:
+            # Usiamo il modello Flash che è il più veloce
+            model = genai.GenerativeModel('gemini-1.5-flash')
+            response = model.generate_content(["Cosa vedi in questa immagine? Riassumi per un'azienda.", img])
+            st.success(response.text)
+        except Exception as e:
+            st.error(f"Errore tecnico: {e}")
