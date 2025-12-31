@@ -1,6 +1,7 @@
 import streamlit as st
 import requests
-import fitz  # PyMuPDF
+import fitz
+import time
 
 # --- CONFIGURAZIONE ---
 GROQ_API_KEY = "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"
@@ -24,14 +25,14 @@ if not st.session_state.auth:
 if "messages" not in st.session_state: st.session_state.messages = []
 if "doc_text" not in st.session_state: st.session_state.doc_text = ""
 
-# --- FUNZIONE LETTURA PDF (OTTIMIZZATA) ---
+# --- FUNZIONE LETTURA PDF (ULTRA-LEGGERA) ---
 def get_content(uploaded_file):
     try:
         doc = fitz.open(stream=uploaded_file.read(), filetype="pdf")
-        # Estraiamo solo i primi 5000 caratteri (circa 1200 token) per stare larghi nel limite
-        return "".join([page.get_text() for page in doc])[:5000]
+        # Riduciamo drasticamente a 3000 caratteri per stare nei 6000 token di limite
+        return "".join([page.get_text() for page in doc])[:3000]
     except Exception as e:
-        return f"Errore lettura: {e}"
+        return f"Errore: {e}"
 
 # --- INTERFACCIA ---
 st.title("🧠 RE-WIRE Business Intelligence")
@@ -41,7 +42,7 @@ with st.sidebar:
     file = st.file_uploader("Carica PDF", type=["pdf"])
     if file:
         st.session_state.doc_text = get_content(file)
-        st.success("Documento pronto.")
+        st.success("Documento ottimizzato.")
     if st.button("🗑️ Reset Chat"):
         st.session_state.messages = []
         st.rerun()
@@ -58,29 +59,40 @@ if prompt := st.chat_input("Chiedi all'AI..."):
         st.markdown(prompt)
 
     with st.chat_message("assistant"):
-        with st.spinner("Analisi..."):
-            # Costruiamo il payload con gestione errori avanzata
+        with st.spinner("Analisi in corso (rispettando i limiti)..."):
+            # Prepariamo i messaggi (solo gli ultimi 2 per risparmiare token)
             messages_payload = [
-                {"role": "system", "content": f"Sei un assistente business. Usa queste info: {st.session_state.doc_text}"},
+                {"role": "system", "content": f"Rispondi brevemente usando: {st.session_state.doc_text}"}
             ]
-            # Aggiungiamo solo gli ultimi 4 messaggi per risparmiare spazio
-            for m in st.session_state.messages[-4:]:
+            for m in st.session_state.messages[-2:]:
                 messages_payload.append(m)
 
-            try:
-                response = requests.post(
-                    API_URL, 
-                    json={"model": MODEL_ID, "messages": messages_payload, "temperature": 0.2},
-                    headers={"Authorization": f"Bearer {GROQ_API_KEY}", "Content-Type": "application/json"},
-                    timeout=10 # Evita che l'app resti appesa
-                )
-                
-                if response.status_code == 200:
-                    answer = response.json()['choices'][0]['message']['content']
-                    st.markdown(answer)
-                    st.session_state.messages.append({"role": "assistant", "content": answer})
-                else:
-                    # QUI LEGGERAI IL VERO ERRORE
-                    st.error(f"Errore API {response.status_code}: {response.text}")
-            except Exception as e:
-                st.error(f"Errore di rete: {e}")
+            # --- LOGICA DI RETRY AUTOMATICO ---
+            max_retries = 2
+            for i in range(max_retries):
+                try:
+                    response = requests.post(
+                        API_URL, 
+                        json={"model": MODEL_ID, "messages": messages_payload, "temperature": 0.1},
+                        headers={"Authorization": f"Bearer {GROQ_API_KEY}", "Content-Type": "application/json"},
+                        timeout=15
+                    )
+                    
+                    if response.status_code == 200:
+                        answer = response.json()['choices'][0]['message']['content']
+                        st.markdown(answer)
+                        st.session_state.messages.append({"role": "assistant", "content": answer})
+                        break
+                    elif response.status_code == 429:
+                        if i < max_retries - 1:
+                            st.warning("Server occupato, riprovo tra 6 secondi...")
+                            time.sleep(6.5) # Aspetta che il limite si resetti
+                            continue
+                        else:
+                            st.error("Limite API raggiunto. Attendi 10 secondi e riprova.")
+                    else:
+                        st.error(f"Errore {response.status_code}")
+                        break
+                except Exception as e:
+                    st.error(f"Errore di rete: {e}")
+                    break
