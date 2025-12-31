@@ -5,14 +5,15 @@ from PIL import Image
 import fitz
 import io
 
-# --- 1. CONFIGURAZIONE OPENAI (La più stabile per la vendita) ---
-# Inserisci qui la tua chiave OpenAI (inizia con sk-...)
-OPENAI_API_KEY = "INSERISCI_QUI_LA_TUA_CHIAVE_OPENAI"
-API_URL = "https://api.openai.com/v1/chat/completions"
+# --- 1. CONFIGURAZIONE DIRETTA ---
+GROQ_API_KEY = "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"
+# NOME MODELLO AGGIORNATO AL 31 DICEMBRE 2025
+MODEL_ID = "llama-3.2-11b-vision-instant"
+API_URL = "https://api.groq.com/openai/v1/chat/completions"
 
 st.set_page_config(page_title="RE-WIRE Business Vision", layout="wide", page_icon="🧠")
 
-# --- 2. LOGIN ---
+# --- 2. LOGIN (rewire2026) ---
 if "auth" not in st.session_state: st.session_state.auth = False
 if not st.session_state.auth:
     st.title("🔐 Accesso Licenza RE-WIRE")
@@ -49,8 +50,6 @@ with st.sidebar:
     if st.button("🗑️ Reset Chat"):
         st.session_state.messages = []
         st.rerun()
-    st.divider()
-    st.caption("Motore: GPT-4o-mini (Professional)")
 
 img_b64 = None
 if file:
@@ -62,32 +61,29 @@ for msg in st.session_state.messages:
     with st.chat_message(msg["role"]):
         st.markdown(msg["content"])
 
-if prompt := st.chat_input("Chiedi all'AI..."):
+if prompt := st.chat_input("Fai una domanda sul documento..."):
     st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"):
         st.markdown(prompt)
 
     with st.chat_message("assistant"):
-        with st.spinner("Analisi professionale in corso..."):
+        with st.spinner("Analisi in corso..."):
             headers = {
-                "Authorization": f"Bearer {OPENAI_API_KEY}",
+                "Authorization": f"Bearer {GROQ_API_KEY}",
                 "Content-Type": "application/json"
             }
             
-            # Payload standard OpenAI Vision
+            content = [{"type": "text", "text": prompt}]
+            if img_b64:
+                content.append({
+                    "type": "image_url",
+                    "image_url": {"url": f"data:image/jpeg;base64,{img_b64}"}
+                })
+
             payload = {
-                "model": "gpt-4o-mini",
-                "messages": [{
-                    "role": "user",
-                    "content": [
-                        {"type": "text", "text": prompt},
-                        {
-                            "type": "image_url",
-                            "image_url": {"url": f"data:image/jpeg;base64,{img_b64}" if img_b64 else ""}
-                        }
-                    ] if img_b64 else prompt
-                }],
-                "max_tokens": 1000
+                "model": MODEL_ID,
+                "messages": [{"role": "user", "content": content}],
+                "temperature": 0.1
             }
 
             try:
@@ -99,6 +95,6 @@ if prompt := st.chat_input("Chiedi all'AI..."):
                     st.markdown(answer)
                     st.session_state.messages.append({"role": "assistant", "content": answer})
                 else:
-                    st.error(f"Errore: {result.get('error', {}).get('message')}")
+                    st.error(f"Errore {response.status_code}: {result.get('error', {}).get('message')}")
             except Exception as e:
                 st.error(f"Connessione fallita: {e}")
