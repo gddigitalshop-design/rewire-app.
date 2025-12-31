@@ -5,116 +5,129 @@ from PIL import Image
 import io
 
 # ---------------------------------------------------------
-# 1. CONFIGURAZIONE UI E STILE FORZATO (TESTO NERO)
+# 1. CONFIGURAZIONE UI (PROFESSIONALE E PULITA)
 # ---------------------------------------------------------
 st.set_page_config(page_title="REWIRE AI PRO", page_icon="⚡", layout="wide")
 
+# CSS per garantire leggibilità assoluta (Testo Nero su Sfondo Chiaro)
 st.markdown("""
 <style>
-    /* Forza il colore del testo globale */
     .stApp { background-color: #ffffff; color: #1a1a1a; }
     
-    /* Stile per i messaggi della chat */
+    /* Sidebar scura ed elegante */
+    [data-testid="stSidebar"] { background-color: #111827 !important; }
+    [data-testid="stSidebar"] * { color: white !important; }
+    
+    /* Messaggi della chat leggibili */
     [data-testid="stChatMessage"] {
-        background-color: #f0f2f6 !important; /* Grigio chiaro per i messaggi */
-        border: 1px solid #ddd !important;
-        color: #1a1a1a !important; /* Testo nero */
-        border-radius: 15px;
-    }
-
-    /* Distinzione colore testo per l'assistente */
-    [data-testid="stChatMessageContent"] p {
+        background-color: #f3f4f6 !important;
+        border: 1px solid #e5e7eb !important;
+        border-radius: 12px;
         color: #1a1a1a !important;
-        font-size: 16px;
     }
-
-    /* Sidebar scura per contrasto professionale */
-    [data-testid="stSidebar"] {
-        background-color: #111827 !important;
-    }
-    [data-testid="stSidebar"] .stMarkdown, [data-testid="stSidebar"] label {
-        color: white !important;
-    }
-
-    /* Bottone login e azioni */
+    
+    /* Forza il colore nero per ogni paragrafo nei messaggi */
+    [data-testid="stChatMessageContent"] p { color: #1a1a1a !important; }
+    
+    /* Bottone stile Enterprise */
     .stButton>button {
         width: 100%;
-        border-radius: 10px;
+        border-radius: 8px;
         background-color: #4F46E5;
         color: white !important;
-        font-weight: bold;
+        border: none;
+        padding: 10px;
+        font-weight: 600;
     }
 </style>
 """, unsafe_allow_html=True)
 
 # ---------------------------------------------------------
-# 2. INIZIALIZZAZIONE E SICUREZZA
+# 2. INIZIALIZZAZIONE STATI E API
 # ---------------------------------------------------------
 if "auth" not in st.session_state:
     st.session_state.auth = False
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
-# Gestione sicura della chiave API
+# Tentativo di recupero chiave API
 try:
     GROQ_API_KEY = st.secrets["GROQ_API_KEY"]
-except:
-    st.error("Errore: Chiave API non trovata nei Secrets di Streamlit.")
+except Exception:
+    st.error("Errore: Inserisci la 'GROQ_API_KEY' nei Secrets di Streamlit.")
     st.stop()
 
 API_URL = "https://api.groq.com/openai/v1/chat/completions"
 
 # ---------------------------------------------------------
-# 3. PAGINA DI LOGIN
+# 3. LOGICA DI ACCESSO (LOGIN)
 # ---------------------------------------------------------
 if not st.session_state.auth:
     _, col, _ = st.columns([1, 1.2, 1])
     with col:
         st.markdown("<h1 style='text-align: center; color: #1a1a1a;'>⚡ REWIRE AI</h1>", unsafe_allow_html=True)
-        st.info("Sistema protetto. Inserisci la licenza per continuare.")
-        pwd = st.text_input("Password Licenza:", type="password")
-        if st.button("SBLOCCA SOFTWARE"):
-            if pwd == "rewire2026":
-                st.session_state.auth = True
-                st.rerun()
-            else:
-                st.error("Password errata.")
+        st.markdown("<p style='text-align: center; color: #666;'>Licenza Enterprise v.2026</p>", unsafe_allow_html=True)
+        
+        with st.form("login_form"):
+            pwd = st.text_input("Inserisci Password Licenza:", type="password")
+            submit = st.form_submit_button("ACCEDI AL SISTEMA")
+            
+            if submit:
+                if pwd == "rewire2026":
+                    st.session_state.auth = True
+                    st.rerun()
+                else:
+                    st.error("Credenziali non valide.")
     st.stop()
 
 # ---------------------------------------------------------
-# 4. SIDEBAR
+# 4. BARRA LATERALE (FUNZIONI DI AFFITTO/VENDITA)
 # ---------------------------------------------------------
 with st.sidebar:
-    st.title("⚡ Rewire Control")
-    st.success("Licenza: ATTIVA (2026)")
+    st.markdown("### 🛠️ Pannello Strumenti")
+    st.success("Stato: Licenza Attiva")
     st.markdown("---")
     
-    uploaded_file = st.file_uploader("📁 Carica File (Immagini/Testo)", type=["png", "jpg", "jpeg", "txt"])
+    # Caricamento file
+    uploaded_file = st.file_uploader("📁 Carica un file (Immagini o Testo)", type=["png", "jpg", "jpeg", "txt"])
     
-    template = st.selectbox("🎯 Template Rapidi:", [
-        "Chat Libera", 
-        "Analisi Tecnica Immagine", 
-        "Riassunto Contenuto"
+    # Template Pronti
+    template = st.selectbox("🎯 Azioni Rapide:", [
+        "Chat Standard",
+        "Analisi Dettagliata Immagine",
+        "Riassunto Professionale",
+        "Correzione Bozza"
     ])
     
-    if st.button("🗑️ Svuota Chat"):
+    st.markdown("---")
+    if st.button("🗑️ Cancella Memoria Chat"):
         st.session_state.messages = []
         st.rerun()
-
-    if st.button("🚪 Logout"):
+        
+    if st.button("🚪 Termina Sessione"):
         st.session_state.auth = False
         st.rerun()
 
 # ---------------------------------------------------------
-# 5. FUNZIONE CHIAMATA API GROQ
+# 5. FUNZIONE CORE API (NESSUN ERRORE DI SINTASSI)
 # ---------------------------------------------------------
 def get_ai_response(user_input, image_b64=None):
-    headers = {"Authorization": f"Bearer {GROQ_API_KEY}", "Content-Type": "application/json"}
+    headers = {
+        "Authorization": f"Bearer {GROQ_API_KEY}",
+        "Content-Type": "application/json"
+    }
     
-    # Sceglie il modello in base alla presenza di un'immagine
-    model = "llama-3.2-11b-vision-preview" if image_b64 else "llama-3.3-70b-versatile"
+    # Sceglie il modello: Vision se c'è un'immagine, altrimenti il 70B
+    model_name = "llama-3.2-11b-vision-preview" if image_b64 else "llama-3.3-70b-versatile"
     
-    # Prepara il contenuto del messaggio
+    # Costruzione del Payload
+    messages = [{"role": "system", "content": "Sei Rewire AI, un assistente di alto livello. Rispondi in italiano."}]
+    
+    # Aggiunge cronologia per dare memoria
+    for msg in st.session_state.messages[-4:]:
+        messages.append({"role": msg["role"], "content": msg["content"]})
+    
+    # Gestione contenuto (Vision vs Text)
     if image_b64:
         user_content = [
             {"type": "text", "text": user_input},
@@ -122,6 +135,11 @@ def get_ai_response(user_input, image_b64=None):
         ]
     else:
         user_content = user_input
+        
+    messages.append({"role": "user", "content": user_content})
 
-    # Costruisce la cronologia messaggi
-    payload_messages = [{"role": "system", "content": "
+    payload = {
+        "model": model_name,
+        "messages": messages,
+        "temperature": 0.6
+    }
