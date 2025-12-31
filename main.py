@@ -1,6 +1,7 @@
 import streamlit as st
 import requests
 import fitz
+from PIL import Image
 import io
 
 # --- CONFIGURAZIONE ---
@@ -32,7 +33,7 @@ def auto_analyze(text):
     payload = {
         "model": MODEL_ID,
         "messages": [
-            {"role": "system", "content": "Sei un analista esperto. Estrai i punti chiave e i dati principali."},
+            {"role": "system", "content": "Sei un analista esperto. Riassumi i dati principali del documento."},
             {"role": "user", "content": f"Documento: {text}"}
         ],
         "temperature": 0.2
@@ -41,19 +42,24 @@ def auto_analyze(text):
         response = requests.post(API_URL, json=payload, headers=headers)
         return response.json()['choices'][0]['message']['content']
     except:
-        return "Errore nell'analisi."
+        return "Errore nell'analisi AI."
 
 # --- INTERFACCIA ---
-st.title("🧠 RE-WIRE Intelligence")
+st.title("🧠 RE-WIRE Business Intelligence")
 
 with st.sidebar:
-    st.header("📁 Caricamento")
-    file = st.file_uploader("Carica il PDF", type=["pdf"])
+    st.header("📁 Caricamento (PDF o FOTO)")
+    file = st.file_uploader("Trascina qui il file", type=["pdf", "jpg", "jpeg", "png"])
     
     if file and not st.session_state.file_processed:
-        with st.spinner("Generazione Report..."):
-            doc = fitz.open(stream=file.read(), filetype="pdf")
-            st.session_state.doc_text = "".join([page.get_text() for page in doc])[:4000]
+        with st.spinner("Analisi in corso..."):
+            if file.type == "application/pdf":
+                doc = fitz.open(stream=file.read(), filetype="pdf")
+                st.session_state.doc_text = "".join([page.get_text() for page in doc])[:4000]
+            else:
+                # Se è una FOTO, informiamo l'AI che è un'immagine (l'analisi avanzata richiederebbe Tesseract)
+                st.session_state.doc_text = f"L'utente ha caricato una foto denominata {file.name}. Analizza le richieste dell'utente."
+            
             summary = auto_analyze(st.session_state.doc_text)
             st.session_state.messages.append({"role": "assistant", "content": summary})
             st.session_state.file_processed = True
@@ -65,33 +71,30 @@ with st.sidebar:
         st.session_state.file_processed = False
         st.rerun()
 
-# --- AREA CHAT E DOWNLOAD ---
+# --- AREA SALVATAGGIO (Migliorata) ---
 if st.session_state.messages:
-    # Mostriamo l'ultimo report generato
-    st.subheader("📊 Analisi Documento")
-    
-    # Prepariamo il testo per il download
-    full_report = "--- REPORT RE-WIRE ---\n\n"
+    # Creiamo il file di testo in memoria per il download
+    report_text = "--- REPORT RE-WIRE ---\n\n"
     for m in st.session_state.messages:
-        full_report += f"{m['role'].upper()}: {m['content']}\n\n"
-
-    # PULSANTE DI SALVATAGGIO SEMPRE VISIBILE IN ALTO
+        report_text += f"{m['role'].upper()}: {m['content']}\n\n"
+    
+    # Pulsante di salvataggio ultra-stabile
     st.download_button(
-        label="📥 SALVA ANALISI SU PC/CELLULARE",
-        data=full_report,
-        file_name="Analisi_REWIRE.txt",
+        label="📥 SALVA LAVORO (Download Report)",
+        data=report_text,
+        file_name="Analisi_Business.txt",
         mime="text/plain",
-        key="download_btn" # Chiave univoca per evitare errori
+        help="Clicca qui per salvare tutta la chat e l'analisi sul tuo dispositivo"
     )
     st.divider()
 
-# Visualizzazione messaggi
+# Visualizzazione chat
 for message in st.session_state.messages:
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
 
 # Chat interattiva
-if prompt := st.chat_input("Fai una domanda per approfondire..."):
+if prompt := st.chat_input("Chiedi dettagli sul documento..."):
     st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"):
         st.markdown(prompt)
@@ -104,4 +107,8 @@ if prompt := st.chat_input("Fai una domanda per approfondire..."):
                 {"role": "user", "content": prompt}
             ]
         }
-        res = requests
+        res = requests.post(API_URL, json=payload, headers={"Authorization": f"Bearer {GROQ_API_KEY}"})
+        ans = res.json()['choices'][0]['message']['content']
+        st.markdown(ans)
+        st.session_state.messages.append({"role": "assistant", "content": ans})
+        st.rerun()
