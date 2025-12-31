@@ -6,22 +6,22 @@ import base64
 
 # --- CONFIGURAZIONE API ---
 GROQ_API_KEY = "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"
-# CAMBIAMO IL MODELLO: Usiamo la versione VISION
 MODEL_ID = "llama-3.2-11b-vision-preview" 
 API_URL = "https://api.groq.com/openai/v1/chat/completions"
 
 st.set_page_config(page_title="RE-WIRE AI PRO", layout="wide", page_icon="⚡")
 
-# --- CSS (MANTENIAMO IL LOOK PREMIUM) ---
+# --- CSS PREMIUM ---
 st.markdown("""
     <style>
     .stApp { background: #0d1117; color: #e6edf3; }
     .main-title { font-size: 45px !important; font-weight: 800; background: linear-gradient(90deg, #00f2fe, #4facfe); -webkit-background-clip: text; -webkit-text-fill-color: transparent; text-align: center; }
     .img-container { border: 2px solid #4facfe; border-radius: 15px; overflow: hidden; background: black; margin-bottom: 20px; }
+    .stChatMessage { background: rgba(255, 255, 255, 0.05) !important; border-radius: 15px !important; }
     </style>
     """, unsafe_allow_html=True)
 
-# --- FUNZIONE PER CONVERTIRE IMMAGINE IN BASE64 (Per la Visione) ---
+# --- FUNZIONE ENCODE ---
 def encode_image(image_bytes):
     return base64.b64encode(image_bytes).decode('utf-8')
 
@@ -56,9 +56,8 @@ if st.session_state.current_file:
         st.markdown('</div>', unsafe_allow_html=True)
     with col_b:
         st.success(f"Modalità {mode} - VISIONE ATTIVA")
-        st.write("L'IA può ora VEDERE realmente l'immagine. Niente più allucinazioni sui cappelli.")
 
-# --- CHAT CON LOGICA VISION ---
+# --- CHAT ---
 for m in st.session_state.messages:
     with st.chat_message(m["role"]): st.markdown(m["content"])
 
@@ -67,22 +66,33 @@ if prompt := st.chat_input("Analizza l'immagine..."):
     with st.chat_message("user"): st.markdown(prompt)
     
     with st.chat_message("assistant"):
-        # Costruiamo il messaggio per il modello VISION
-        content = [{"type": "text", "text": f"Agisci come RE-WIRE AI in modalità {mode}. Descrivi ciò che vedi realmente, ignorando il nome del file. Se vedi un teschio e robot, parla di quelli."}]
+        # Preparazione contenuto
+        content_list = [{"type": "text", "text": f"Sei RE-WIRE AI ({mode}). Descrivi la scena reale: teschio, robot, bambino. Ignora nomi file fuorvianti come 'CAP'."}]
         
         if st.session_state.current_file and st.session_state.current_file["type"] == "img":
-            content.append({
+            content_list.append({
                 "type": "image_url",
                 "image_url": {"url": f"data:image/jpeg;base64,{st.session_state.current_file['base64']}"}
             })
         
-        content.append({"type": "text", "text": prompt})
+        content_list.append({"type": "text", "text": prompt})
 
-        r = requests.post(API_URL, 
-            json={"model": MODEL_ID, "messages": [{"role": "user", "content": content}]}, 
-            headers={"Authorization": f"Bearer {GROQ_API_KEY}"})
+        try:
+            response = requests.post(API_URL, 
+                json={"model": MODEL_ID, "messages": [{"role": "user", "content": content_list}]}, 
+                headers={"Authorization": f"Bearer {GROQ_API_KEY}"})
+            
+            res_json = response.json()
+            
+            # CONTROLLO SICUREZZA PER EVITARE KEYERROR
+            if 'choices' in res_json:
+                ans = res_json['choices'][0]['message']['content']
+                st.markdown(ans)
+                st.session_state.messages.append({"role": "assistant", "content": ans})
+            else:
+                st.error("L'IA è momentaneamente sovraccarica o la chiave API ha raggiunto il limite. Riprova tra un istante.")
+                st.write(res_json) # Debug per te, poi lo toglieremo
+        except Exception as e:
+            st.error(f"Errore di sistema: {e}")
         
-        ans = r.json()['choices'][0]['message']['content']
-        st.markdown(ans)
-        st.session_state.messages.append({"role": "assistant", "content": ans})
         st.rerun()
