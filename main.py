@@ -131,3 +131,4 @@ def groq_answer(prompt):
                 "content": (
                     "Sei REWIRE AI. Aiuti famiglie, bambini non vedenti, utenti con problemi quotidiani. "
                     "Rispondi con calma, preci
+
