@@ -9,9 +9,6 @@ import os
 # ========================================================
 #                 CONFIGURAZIONE
 # ========================================================
-
-# Inserisci la tua chiave Groq in .streamlit/secrets.toml
-# GROQ_API_KEY="gsk_abcdef1234567890"
 API_KEY = st.secrets.get("GROQ_API_KEY")
 if not API_KEY:
     st.error("❌ Devi inserire la tua GROQ_API_KEY in .streamlit/secrets.toml")
@@ -38,6 +35,8 @@ st.markdown(
     .stButton>button {
         background-color: #4B6FFF;
         color: white;
+        border-radius: 10px;
+        padding: 0.5em 1em;
     }
     </style>
     """,
@@ -67,10 +66,10 @@ if "project_name" not in st.session_state:
     st.session_state.project_name = ""
 
 # ========================================================
-#               HEADER APP
+#               HEADER
 # ========================================================
 st.markdown("<h1 style='text-align:center; color:#6A5ACD;'>⚡ RE-WIRE AI</h1>", unsafe_allow_html=True)
-st.markdown("<p style='text-align:center; color:#666;'>Descrivi immagini, crea piani e risolvi problemi quotidiani.</p>", unsafe_allow_html=True)
+st.markdown("<p style='text-align:center; color:#666;'>Descrizione immagini + risoluzione problemi quotidiani</p>", unsafe_allow_html=True)
 st.write("---")
 
 # ========================================================
@@ -81,7 +80,7 @@ with st.sidebar:
     st.session_state.project_name = st.text_input("Nome progetto", value=st.session_state.project_name)
 
     if st.button("💾 Salva progetto"):
-        if st.session_state.project_name.strip() != "":
+        if st.session_state.project_name.strip():
             data = {"chat": st.session_state.chat, "img": st.session_state.img}
             with open(f"{st.session_state.project_name}.json", "w", encoding="utf-8") as f:
                 json.dump(data, f, ensure_ascii=False)
@@ -95,7 +94,7 @@ with st.sidebar:
                 st.session_state.chat = data.get("chat", [])
                 st.session_state.img = data.get("img", None)
             st.success("Progetto caricato!")
-            st.experimental_rerun()
+            st.rerun()
         else:
             st.error("Progetto non trovato.")
 
@@ -110,29 +109,29 @@ with st.sidebar:
     if st.button("🔄 Reset chat"):
         st.session_state.chat = []
         st.session_state.img = None
-        st.experimental_rerun()
+        st.rerun()
 
 # ========================================================
-#                TEMPLATES RAPIDI
+#                TEMPLATES
 # ========================================================
 st.subheader("📌 Template veloci")
 c1, c2, c3, c4, c5 = st.columns(5)
 
 if c1.button("👪 Famiglia"):
     st.session_state.chat.append({"role": "user", "content": "Fammi un piano settimanale per la famiglia."})
-    st.experimental_rerun()
+    st.rerun()
 if c2.button("💼 Lavoro"):
     st.session_state.chat.append({"role": "user", "content": "Organizza il mio lavoro giornaliero."})
-    st.experimental_rerun()
+    st.rerun()
 if c3.button("🎨 Hobby"):
     st.session_state.chat.append({"role": "user", "content": "Suggerisci un nuovo hobby creativo."})
-    st.experimental_rerun()
+    st.rerun()
 if c4.button("🥗 Dieta"):
-    st.session_state.chat.append({"role": "user", "content": "Crea un piano alimentare settimanale sano."})
-    st.experimental_rerun()
+    st.session_state.chat.append({"role": "user", "content": "Crea un piano alimentare settimanale."})
+    st.rerun()
 if c5.button("❓ Problemi"):
     st.session_state.chat.append({"role": "user", "content": "Aiutami a risolvere un problema quotidiano."})
-    st.experimental_rerun()
+    st.rerun()
 
 st.write("---")
 
@@ -160,7 +159,11 @@ if prompt:
                     "image_url": f"data:image/jpeg;base64,{st.session_state.img}"
                 })
 
-            payload = {"model": MODEL, "messages": [{"role": "user", "content": content_block}], "temperature": 0.4}
+            payload = {
+                "model": MODEL,
+                "messages": [{"role": "user", "content": content_block}],
+                "temperature": 0.4
+            }
 
             r = requests.post(
                 URL,
@@ -169,9 +172,7 @@ if prompt:
                 timeout=20
             )
 
-            if r.status_code == 401:
-                st.error("❌ Errore 401: API Key non valida. Controlla la tua chiave in .streamlit/secrets.toml")
-            elif r.status_code != 200:
+            if r.status_code != 200:
                 st.error(f"Errore modello: {r.status_code}")
             else:
                 ans = r.json()["choices"][0]["message"]["content"]
@@ -181,4 +182,4 @@ if prompt:
         except Exception as e:
             st.error(f"Errore: {e}")
 
-    st.experimental_rerun()
+    st.rerun()
