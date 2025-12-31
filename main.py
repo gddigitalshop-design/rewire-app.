@@ -27,7 +27,7 @@ if not st.session_state.auth:
 # --- INIZIALIZZAZIONE ---
 if "messages" not in st.session_state: st.session_state.messages = []
 if "doc_text" not in st.session_state: st.session_state.doc_text = ""
-if "current_file_data" not in st.session_state: st.session_state.current_file_data = None # Per salvare l'immagine/PDF
+if "current_file_data" not in st.session_state: st.session_state.current_file_data = None
 
 # --- SIDEBAR ---
 with st.sidebar:
@@ -39,54 +39,69 @@ with st.sidebar:
             st.session_state.messages = []
             st.session_state.last_file_name = uploaded_file.name
             
-            with st.spinner(f"Elaborazione {uploaded_file.name}..."):
-                if uploaded_file.type in ["image/jpeg", "image/png"]:
-                    image_data = uploaded_file.read()
-                    st.session_state.current_file_data = {"type": "image", "data": image_data, "name": uploaded_file.name}
-                    st.session_state.doc_text = f"[Contenuto Immagine: {uploaded_file.name}]"
-                    st.session_state.messages.append({"role": "assistant", "content": f"📸 Hai caricato l'immagine: `{uploaded_file.name}`. La sto guardando con attenzione!"})
-                elif uploaded_file.type == "application/pdf":
-                    pdf_data = uploaded_file.read()
-                    doc = fitz.open(stream=pdf_data, filetype="pdf")
-                    text = "".join([p.get_text() for p in doc])[:4000]
-                    st.session_state.doc_text = text
-                    st.session_state.current_file_data = {"type": "pdf", "data": text, "name": uploaded_file.name}
-                    st.session_state.messages.append({"role": "assistant", "content": f"📄 Ho estratto il testo dal PDF: `{uploaded_file.name}`. Pronto per l'analisi!"})
-                st.rerun()
+            if uploaded_file.type in ["image/jpeg", "image/png"]:
+                img_bytes = uploaded_file.read()
+                st.session_state.current_file_data = {"type": "image", "data": img_bytes, "name": uploaded_file.name}
+                st.session_state.doc_text = f"Analisi immagine: {uploaded_file.name}"
+            elif uploaded_file.type == "application/pdf":
+                doc = fitz.open(stream=uploaded_file.read(), filetype="pdf")
+                text = "".join([p.get_text() for p in doc])[:4000]
+                st.session_state.doc_text = text
+                st.session_state.current_file_data = {"type": "pdf", "data": text, "name": uploaded_file.name}
+            st.rerun()
 
     if st.button("🗑️ Reset Totale"):
         st.session_state.clear()
         st.rerun()
 
-# --- AREA CENTRALE: VISUALIZZAZIONE FILE (Migliorata) ---
+# --- AREA CENTRALE: VISUALIZZAZIONE FILE ---
 st.markdown("<h2 style='text-align: center;'>📄 Documento Attuale</h2>", unsafe_allow_html=True)
 
-container_file = st.container(border=True)
-with container_file:
+with st.container(border=True):
     if st.session_state.current_file_data:
-        file_info = st.session_state.current_file_data
-        if file_info["type"] == "image":
-            st.image(file_info["data"], caption=f"Immagine: {file_info['name']}", use_container_width=True)
-        elif file_info["type"] == "pdf":
-            st.info(f"Anteprima Testo dal PDF: {file_info['name']}")
-            st.write(file_info["data"][:1000] + "...") # Mostra un'anteprima del testo
+        f = st.session_state.current_file_data
+        if f["type"] == "image":
+            st.image(f["data"], caption=f["name"], use_container_width=True)
+        else:
+            st.info(f"Testo PDF: {f['name']}")
+            st.write(f["data"][:1000] + "...")
     else:
-        st.write("Nessun file caricato al momento. Carica un PDF o una foto dalla barra laterale per iniziare l'analisi.")
+        st.write("Nessun file caricato.")
 
 st.divider()
 
-# --- CHAT & LOGICA TEMPLATE ---
+# --- CHAT ---
 for m in st.session_state.messages:
     with st.chat_message(m["role"]):
         st.markdown(m["content"])
 
-if prompt := st.chat_input("Chiedi all'AI (es: 'Genera template grafico' o 'Riassumi questo documento')..."):
+if prompt := st.chat_input("Chiedi all'AI o scrivi 'Template Grafico'..."):
     st.session_state.messages.append({"role": "user", "content": prompt})
     
     with st.chat_message("assistant"):
-        context = st.session_state.doc_text if st.session_state.doc_text else "Nessun documento."
+        # Logica Template Decisa
+        if "template grafico" in prompt.lower():
+            ans = (
+                "### 🎨 Analisi Template Grafico\n"
+                "- **Concetto:** Analisi visiva del file caricato.\n"
+                "- **Layout:** Struttura consigliata basata sul contenuto.\n"
+                "- **Colori:** Palette suggerita.\n"
+                "- **Mood:** Atmosfera percepita."
+            )
+        else:
+            payload = {
+                "model": MODEL_ID,
+                "messages": [
+                    {"role": "system", "content": f"Sei un assistente business. Contesto: {st.session_state.doc_text}"},
+                    {"role": "user", "content": prompt}
+                ]
+            }
+            try:
+                r = requests.post(API_URL, json=payload, headers={"Authorization": f"Bearer {GROQ_API_KEY}"})
+                ans = r.json()['choices'][0]['message']['content']
+            except:
+                ans = "Errore di connessione."
         
-        # Logica per il template grafico (Più specifica)
-        if "template grafico" in prompt.lower() and st.session_state.current_file_data and st.session_state.current_file_data["type"] == "image":
-            response_content = f"Certo! Per l'immagine **{st.session_state.current_file_data['name']}**, ecco un'analisi per il tuo template grafico:\n\n"
-            response_content += "- **Tema/Concetto:** [Descrivi il tema principale o il messaggio vis
+        st.markdown(ans)
+        st.session_state.messages.append({"role": "assistant", "content": ans})
+        st.rerun()
