@@ -7,7 +7,7 @@ import pyttsx3
 import uuid
 
 # ---------------------
-# CONFIGURAZIONE APP
+# CONFIGURAZIONE
 # ---------------------
 st.set_page_config(
     page_title="REWIRE AI",
@@ -69,25 +69,3 @@ if not st.session_state.auth:
             st.session_state.auth = True
             st.experimental_rerun()
         else:
-            st.error("Password errata.")
-    st.stop()
-
-# ---------------------
-# FUNZIONI
-# ---------------------
-def prepare_image(file):
-    img = Image.open(file).convert("RGB")
-    buf = io.BytesIO()
-    img.save(buf, format="JPEG")
-    return base64.b64encode(buf.getvalue()).decode()
-
-def groq_answer(prompt):
-    headers = {"Authorization": f"Bearer {GROQ_API_KEY}"}
-
-    content = [{"type": "text", "text": prompt}]
-    if st.session_state.image_b64:
-        content.append({
-            "type": "image_url",
-            "image_url": {
-                "url": f"data:image/jpeg;base64,{st.session_state.image_b64}"
-            }
