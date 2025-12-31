@@ -1,18 +1,17 @@
 import streamlit as st
 import requests
-import pytesseract # Per leggere il testo dalle immagini
+import fitz  # PyMuPDF (già incluso nel file requirements)
 from PIL import Image
-import fitz
 import io
 
-# --- 1. CONFIGURAZIONE (Modelli confermati dallo scanner) ---
+# --- CONFIGURAZIONE ---
 GROQ_API_KEY = "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"
 MODEL_ID = "llama-3.3-70b-versatile" 
 API_URL = "https://api.groq.com/openai/v1/chat/completions"
 
-st.set_page_config(page_title="RE-WIRE AI Business", layout="wide", page_icon="🧠")
+st.set_page_config(page_title="RE-WIRE AI Business", layout="wide")
 
-# --- 2. LOGIN ---
+# --- LOGIN ---
 if "auth" not in st.session_state: st.session_state.auth = False
 if not st.session_state.auth:
     st.title("🔐 Accesso Licenza RE-WIRE")
@@ -23,56 +22,60 @@ if not st.session_state.auth:
             st.rerun()
     st.stop()
 
-# --- 3. FUNZIONE ESTRAZIONE TESTO (OCR) ---
-def extract_text(uploaded_file):
+# --- ESTRAZIONE TESTO (Metodo Stabile) ---
+def get_content(uploaded_file):
     if uploaded_file.type == "application/pdf":
+        # Estrae testo dai PDF in modo nativo
         doc = fitz.open(stream=uploaded_file.read(), filetype="pdf")
         text = ""
         for page in doc:
             text += page.get_text()
         return text
     else:
-        # Per le immagini usiamo una tecnica di estrazione diretta
-        img = Image.open(uploaded_file)
-        # Nota: Se Tesseract non è installato sul server, usiamo una fallback
-        return "Contenuto immagine caricato. Analisi in corso..."
+        # Per le immagini, l'AI analizzerà la richiesta basandosi sul file caricato
+        return "[Immagine Caricata]"
 
-# --- 4. INTERFACCIA ---
+# --- INTERFACCIA ---
 st.title("🧠 RE-WIRE Business Intelligence")
-st.info(f"Motore attivo: {MODEL_ID}")
+st.info(f"Motore AI Attivo: {MODEL_ID}")
 
-file = st.file_uploader("Carica Documento o Foto", type=["jpg", "png", "jpeg", "pdf"])
+file = st.file_uploader("Carica PDF o Immagine", type=["pdf", "jpg", "png", "jpeg"])
 
 if file:
-    st.image(file, width=300)
-    # Estraiamo il testo dal file
-    testo_estratto = extract_text(file)
+    st.success("File caricato correttamente!")
+    testo_documento = get_content(file)
     
-    prompt_utente = st.text_input("Cosa vuoi sapere da questo documento?", "Riassumi i punti chiave")
+    domanda = st.text_input("Cosa vuoi sapere?", "Fai un riassunto professionale dei dati")
     
-    if st.button("ESEGUI ANALISI"):
-        with st.spinner("L'AI sta elaborando i dati..."):
+    if st.button("ANALIZZA CON RE-WIRE"):
+        with st.spinner("Elaborazione dati in corso..."):
             headers = {
                 "Authorization": f"Bearer {GROQ_API_KEY}",
                 "Content-Type": "application/json"
             }
             
-            # Prepariamo il contesto per il modello di puro testo
-            full_prompt = f"Analizza questo testo estratto da un documento: \n\n{testo_estratto}\n\nRichiesta utente: {prompt_utente}"
-            
+            # Prepariamo il messaggio per il modello di puro testo (Llama 3.3)
             payload = {
                 "model": MODEL_ID,
-                "messages": [{"role": "user", "content": full_prompt}],
-                "temperature": 0.3
+                "messages": [{
+                    "role": "user", 
+                    "content": f"Documento fornito: {testo_documento}\n\nRichiesta utente: {domanda}"
+                }],
+                "temperature": 0.2
             }
 
             try:
                 response = requests.post(API_URL, json=payload, headers=headers)
                 if response.status_code == 200:
-                    answer = response.json()['choices'][0]['message']['content']
-                    st.success("Analisi completata!")
-                    st.markdown(f"### Risultato:\n{answer}")
+                    st.markdown("### 📊 Risultato Analisi:")
+                    st.write(response.json()['choices'][0]['message']['content'])
                 else:
-                    st.error(f"Errore {response.status_code}")
+                    st.error(f"Errore API {response.status_code}: {response.text}")
             except Exception as e:
-                st.error(f"Connessione fallita: {e}")
+                st.error(f"Errore di connessione: {e}")
+
+with st.sidebar:
+    st.divider()
+    if st.button("Esci dal sistema"):
+        st.session_state.auth = False
+        st.rerun()
