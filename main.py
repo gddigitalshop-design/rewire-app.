@@ -60,6 +60,7 @@ st.write("---")
 #                     SIDEBAR
 # -------------------------------------------------------
 with st.sidebar:
+
     st.header("📁 Gestione Progetto")
 
     st.session_state.project_name = st.text_input("Nome progetto", value=st.session_state.project_name)
@@ -88,7 +89,6 @@ with st.sidebar:
 
     st.write("---")
 
-    # Upload immagine
     st.header("🖼 Analisi Immagine")
     file = st.file_uploader("Carica immagine", type=["jpg", "jpeg", "png"])
     if file:
@@ -97,7 +97,6 @@ with st.sidebar:
 
     st.write("---")
 
-    # Reset chat
     if st.button("🔄 Reset Chat"):
         st.session_state.chat = []
         st.session_state.img = None
@@ -120,11 +119,11 @@ if c2.button("💼 Lavoro"):
     st.experimental_rerun()
 
 if c3.button("🎨 Hobby"):
-    st.session_state.chat.append({"role": "user", "content": "Suggeriscimi qualche idea per un nuovo hobby creativo."})
+    st.session_state.chat.append({"role": "user", "content": "Suggerisci un nuovo hobby creativo."})
     st.experimental_rerun()
 
 if c4.button("🥗 Dieta"):
-    st.session_state.chat.append({"role": "user", "content": "Crea un piano alimentare settimanale sano e vario."})
+    st.session_state.chat.append({"role": "user", "content": "Crea un piano alimentare settimanale."})
     st.experimental_rerun()
 
 if c5.button("❓ Problemi"):
@@ -149,14 +148,13 @@ for msg in st.session_state.chat:
 prompt = st.chat_input("Scrivi qui il tuo messaggio...")
 
 if prompt:
+
     st.session_state.chat.append({"role": "user", "content": prompt})
 
     with st.chat_message("assistant"):
         try:
-            # Contenuto del messaggio
             content_block = [{"type": "text", "text": prompt}]
 
-            # Se esiste immagine -> allega
             if st.session_state.img:
                 content_block.append({
                     "type": "image_url",
@@ -174,18 +172,21 @@ if prompt:
                 "temperature": 0.4
             }
 
-            r = requests.post(
+            response = requests.post(
                 URL,
                 headers={"Authorization": f"Bearer {API_KEY}"},
                 json=payload,
-                timeout=15
+                timeout=20
             )
 
-            if r.status_code != 200:
-                st.error(f"Errore modello: {r.status_code}")
+            if response.status_code != 200:
+                st.error(f"Errore modello: {response.status_code}")
             else:
-                ans = r.json()["choices"][0]["message"]["content"]
+                ans = response.json()["choices"][0]["message"]["content"]
                 st.write(ans)
                 st.session_state.chat.append({"role": "assistant", "content": ans})
 
         except Exception as e:
+            st.error(f"Errore: {e}")
+
+    st.experimental_rerun()
