@@ -15,13 +15,11 @@ st.set_page_config(page_title="RE-WIRE AI", layout="wide", page_icon="⚡")
 # --- STILE CSS PERSONALIZZATO (GRAFICA ACCATTIVANTE) ---
 st.markdown("""
     <style>
-    /* Sfondo sfumato e font */
     .stApp {
         background: linear-gradient(135deg, #0f0c29, #302b63, #24243e);
         color: #ffffff;
     }
     
-    /* Titoli con effetto Neon */
     h1, h2, h3 {
         font-family: 'Inter', sans-serif;
         background: -webkit-linear-gradient(#00f2fe, #4facfe);
@@ -32,14 +30,12 @@ st.markdown("""
         letter-spacing: 2px;
     }
 
-    /* Sidebar futuristica */
     [data-testid="stSidebar"] {
         background-color: rgba(0, 0, 0, 0.4);
         border-right: 1px solid rgba(0, 242, 254, 0.2);
         backdrop-filter: blur(15px);
     }
 
-    /* Box dei messaggi chat */
     .stChatMessage {
         background-color: rgba(255, 255, 255, 0.07) !important;
         border-radius: 20px !important;
@@ -48,7 +44,6 @@ st.markdown("""
         padding: 15px !important;
     }
 
-    /* Input di testo */
     .stTextInput > div > div > input {
         background-color: rgba(0, 0, 0, 0.5) !important;
         color: #00f2fe !important;
@@ -56,7 +51,6 @@ st.markdown("""
         border-radius: 12px;
     }
 
-    /* Bottoni animati */
     .stButton > button {
         background: linear-gradient(90deg, #4facfe 0%, #00f2fe 100%);
         color: #0f0c29 !important;
@@ -72,7 +66,6 @@ st.markdown("""
         color: white !important;
     }
     
-    /* Divider */
     hr {
         border-top: 2px solid rgba(79, 172, 254, 0.2);
     }
@@ -105,7 +98,7 @@ if "messages" not in st.session_state: st.session_state.messages = []
 if "doc_text" not in st.session_state: st.session_state.doc_text = ""
 if "current_file_data" not in st.session_state: st.session_state.current_file_data = None
 
-# --- SIDEBAR (PANNELLO DI CONTROLLO) ---
+# --- SIDEBAR ---
 with st.sidebar:
     st.markdown("<h2 style='color: #4facfe;'>CONTROL PANEL</h2>", unsafe_allow_html=True)
     st.markdown("---")
@@ -130,7 +123,6 @@ with st.sidebar:
 
     st.markdown("<br><br>", unsafe_allow_html=True)
     
-    # PULSANTE RESET (Mantiene il login attivo)
     if st.button("🗑️ RESET WORKSPACE"):
         st.session_state.messages = []
         st.session_state.doc_text = ""
@@ -139,29 +131,5 @@ with st.sidebar:
             del st.session_state.last_file_name
         st.rerun()
 
-# --- AREA CENTRALE: VISUALIZZAZIONE ---
-st.markdown("<h2 style='text-align: center;'>📄 ACTIVE DOCUMENT</h2>", unsafe_allow_html=True)
-
-with st.container():
-    if st.session_state.current_file_data:
-        f = st.session_state.current_file_data
-        col_c1, col_c2, col_c3 = st.columns([0.5, 4, 0.5])
-        with col_c2:
-            if f["type"] == "image":
-                st.image(f["data"], caption=f"Preview: {f['name']}", use_container_width=True)
-            else:
-                st.info(f"📄 PDF Attivo: {f['name']}")
-                with st.expander("🔍 Analizza Testo Estratto"):
-                    st.write(f["data"])
-    else:
-        st.markdown("<p style='text-align: center; opacity: 0.5;'>Nessun file caricato. Trascina un documento nella barra laterale.</p>", unsafe_allow_html=True)
-
-st.markdown("<hr>", unsafe_allow_html=True)
-
-# --- INTERFACCIA CHAT SCORREVOLE ---
-for m in st.session_state.messages:
-    with st.chat_message(m["role"]):
-        st.markdown(m["content"])
-
-# INPUT CHAT
-if prompt
+# --- AREA CENTRALE ---
+st.markdown
