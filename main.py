@@ -5,18 +5,45 @@ from PIL import Image
 import io
 
 # ---------------------------------------------------------
-# 1. CONFIGURAZIONE UI E STILE (DESIGN PREMIUM)
+# 1. CONFIGURAZIONE UI E STILE FORZATO (TESTO NERO)
 # ---------------------------------------------------------
 st.set_page_config(page_title="REWIRE AI PRO", page_icon="⚡", layout="wide")
 
 st.markdown("""
 <style>
-    .stApp { background-color: #f8f9fa; }
-    [data-testid="stSidebar"] { background-color: #111827; color: white; }
-    .stChatMessage { border-radius: 15px; margin-bottom: 10px; border: 1px solid #e5e7eb; }
-    .stButton>button { width: 100%; border-radius: 10px; background-color: #4F46E5; color: white; border: none; }
-    .stButton>button:hover { background-color: #4338CA; border: none; }
-    .status-badge { padding: 5px 10px; border-radius: 20px; font-size: 12px; background-color: #10B981; color: white; }
+    /* Forza il colore del testo globale */
+    .stApp { background-color: #ffffff; color: #1a1a1a; }
+    
+    /* Stile per i messaggi della chat */
+    [data-testid="stChatMessage"] {
+        background-color: #f0f2f6 !important; /* Grigio chiaro per i messaggi */
+        border: 1px solid #ddd !important;
+        color: #1a1a1a !important; /* Testo nero */
+        border-radius: 15px;
+    }
+
+    /* Distinzione colore testo per l'assistente */
+    [data-testid="stChatMessageContent"] p {
+        color: #1a1a1a !important;
+        font-size: 16px;
+    }
+
+    /* Sidebar scura per contrasto professionale */
+    [data-testid="stSidebar"] {
+        background-color: #111827 !important;
+    }
+    [data-testid="stSidebar"] .stMarkdown, [data-testid="stSidebar"] label {
+        color: white !important;
+    }
+
+    /* Bottone login e azioni */
+    .stButton>button {
+        width: 100%;
+        border-radius: 10px;
+        background-color: #4F46E5;
+        color: white !important;
+        font-weight: bold;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -28,11 +55,11 @@ if "auth" not in st.session_state:
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
-# Recupero chiavi dai Secrets di Streamlit
+# Gestione sicura della chiave API
 try:
     GROQ_API_KEY = st.secrets["GROQ_API_KEY"]
 except:
-    st.error("Errore: Chiave API non configurata nei Secrets.")
+    st.error("Errore: Chiave API non trovata nei Secrets di Streamlit.")
     st.stop()
 
 API_URL = "https://api.groq.com/openai/v1/chat/completions"
@@ -43,40 +70,34 @@ API_URL = "https://api.groq.com/openai/v1/chat/completions"
 if not st.session_state.auth:
     _, col, _ = st.columns([1, 1.2, 1])
     with col:
-        st.markdown("<h1 style='text-align: center;'>⚡ REWIRE AI</h1>", unsafe_allow_html=True)
-        st.markdown("<p style='text-align: center;'>Professional AI Enterprise Suite</p>", unsafe_allow_html=True)
-        with st.container():
-            pwd = st.text_input("Inserisci Password Licenza:", type="password")
-            if st.button("ATTIVA LICENZA"):
-                if pwd == "rewire2026":
-                    st.session_state.auth = True
-                    st.rerun()
-                else:
-                    st.error("Password errata. Contatta il supporto per l'affitto.")
+        st.markdown("<h1 style='text-align: center; color: #1a1a1a;'>⚡ REWIRE AI</h1>", unsafe_allow_html=True)
+        st.info("Sistema protetto. Inserisci la licenza per continuare.")
+        pwd = st.text_input("Password Licenza:", type="password")
+        if st.button("SBLOCCA SOFTWARE"):
+            if pwd == "rewire2026":
+                st.session_state.auth = True
+                st.rerun()
+            else:
+                st.error("Password errata.")
     st.stop()
 
 # ---------------------------------------------------------
-# 4. SIDEBAR - GESTIONE E TEMPLATE
+# 4. SIDEBAR
 # ---------------------------------------------------------
 with st.sidebar:
-    st.image("https://cdn-icons-png.flaticon.com/512/4712/4712139.png", width=80)
-    st.title("Rewire Control")
-    st.markdown('<span class="status-badge">● Licenza Attiva</span>', unsafe_allow_html=True)
-    st.write(f"Scadenza: 31/12/2026")
-    
+    st.title("⚡ Rewire Control")
+    st.success("Licenza: ATTIVA (2026)")
     st.markdown("---")
-    st.subheader("📁 File & Media")
-    uploaded_file = st.file_uploader("Carica immagine o documento", type=["png", "jpg", "jpeg", "pdf", "txt"])
     
-    st.subheader("📝 Template Rapidi")
-    template = st.selectbox("Seleziona azione:", [
+    uploaded_file = st.file_uploader("📁 Carica File (Immagini/Testo)", type=["png", "jpg", "jpeg", "txt"])
+    
+    template = st.selectbox("🎯 Template Rapidi:", [
         "Chat Libera", 
         "Analisi Tecnica Immagine", 
-        "Riassunto Documento", 
-        "Scrittura Email Professionale"
+        "Riassunto Contenuto"
     ])
     
-    if st.button("🗑️ Svuota Conversazione"):
+    if st.button("🗑️ Svuota Chat"):
         st.session_state.messages = []
         st.rerun()
 
@@ -85,73 +106,22 @@ with st.sidebar:
         st.rerun()
 
 # ---------------------------------------------------------
-# 5. LOGICA API GROQ
+# 5. FUNZIONE CHIAMATA API GROQ
 # ---------------------------------------------------------
-def process_ai_response(user_input, image_b64=None):
+def get_ai_response(user_input, image_b64=None):
     headers = {"Authorization": f"Bearer {GROQ_API_KEY}", "Content-Type": "application/json"}
     
-    # Se c'è un'immagine usa il modello Vision, altrimenti Llama 3.3
+    # Sceglie il modello in base alla presenza di un'immagine
     model = "llama-3.2-11b-vision-preview" if image_b64 else "llama-3.3-70b-versatile"
     
+    # Prepara il contenuto del messaggio
     if image_b64:
-        content = [
+        user_content = [
             {"type": "text", "text": user_input},
             {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{image_b64}"}}
         ]
     else:
-        content = user_input
+        user_content = user_input
 
-    messages = [{"role": "system", "content": "Sei Rewire AI, un assistente professionale e preciso."}]
-    # Aggiungi cronologia (ultimi 4 messaggi)
-    for m in st.session_state.messages[-4:]:
-        messages.append({"role": m["role"], "content": m["content"]})
-    
-    messages.append({"role": "user", "content": content})
-
-    payload = {"model": model, "messages": messages, "temperature": 0.5}
-    
-    res = requests.post(API_URL, headers=headers, json=payload)
-    if res.status_code == 200:
-        return res.json()['choices'][0]['message']['content']
-    return "Errore nella comunicazione con il server AI."
-
-# ---------------------------------------------------------
-# 6. AREA CHAT PRINCIPALE
-# ---------------------------------------------------------
-st.title("🚀 Smart Workspace")
-
-# Mostra cronologia
-for message in st.session_state.messages:
-    with st.chat_message(message["role"]):
-        st.markdown(message["content"])
-
-# Gestione input
-if prompt := st.chat_input("In cosa posso aiutarti oggi?"):
-    
-    # Se è selezionato un template, modifica il prompt
-    if template == "Analisi Tecnica Immagine":
-        prompt = f"Esegui un'analisi tecnica dettagliata di questa immagine: {prompt}"
-    elif template == "Riassunto Documento":
-        prompt = f"Riassumi i punti chiave di questo contenuto: {prompt}"
-
-    # Visualizza messaggio utente
-    with st.chat_message("user"):
-        st.markdown(prompt)
-    st.session_state.messages.append({"role": "user", "content": prompt})
-
-    # Elaborazione
-    img_b64 = None
-    if uploaded_file and any(x in uploaded_file.name.lower() for x in ['jpg','png','jpeg']):
-        img_b64 = base64.b64encode(uploaded_file.getvalue()).decode()
-
-    with st.chat_message("assistant"):
-        with st.spinner("Rewire sta elaborando..."):
-            response = process_ai_response(prompt, img_b64)
-            st.markdown(response)
-    
-    st.session_state.messages.append({"role": "assistant", "content": response})
-
-# Download della chat
-if st.session_state.messages:
-    chat_history = "\n".join([f"{m['role'].upper()}: {m['content']}" for m in st.session_state.messages])
-    st.sidebar.download_button("💾 Esporta Chat", chat_history, file_name="sessione_rewire.txt")
+    # Costruisce la cronologia messaggi
+    payload_messages = [{"role": "system", "content": "
