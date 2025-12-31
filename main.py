@@ -8,7 +8,7 @@ GROQ_API_KEY = "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"
 MODEL_ID = "llama-3.1-8b-instant"
 API_URL = "https://api.groq.com/openai/v1/chat/completions"
 
-st.set_page_config(page_title="RE-WIRE Auto-AI", layout="wide", page_icon="⚡")
+st.set_page_config(page_title="RE-WIRE Business AI", layout="wide", page_icon="💾")
 
 # --- LOGIN ---
 if "auth" not in st.session_state: st.session_state.auth = False
@@ -32,7 +32,7 @@ def auto_analyze(text):
     payload = {
         "model": MODEL_ID,
         "messages": [
-            {"role": "system", "content": "Sei un analista business. Fornisci un riassunto esecutivo puntato del documento."},
+            {"role": "system", "content": "Sei un analista esperto. Estrai i punti chiave, scadenze e dati numerici dal documento."},
             {"role": "user", "content": f"Analizza questo documento: {text}"}
         ],
         "temperature": 0.2
@@ -41,28 +41,45 @@ def auto_analyze(text):
         response = requests.post(API_URL, json=payload, headers=headers)
         return response.json()['choices'][0]['message']['content']
     except:
-        return "Errore durante l'analisi automatica."
+        return "Errore durante l'analisi."
 
 # --- INTERFACCIA ---
-st.title("⚡ RE-WIRE Auto-Analysis System")
+st.title("🧠 RE-WIRE Intelligence")
 
 with st.sidebar:
-    st.header("📁 Caricamento")
+    st.header("📁 Caricamento Documento")
     file = st.file_uploader("Trascina qui il PDF", type=["pdf"])
     
+    # Analisi Automatica al caricamento
     if file and not st.session_state.file_processed:
-        with st.spinner("Analisi automatica in corso..."):
+        with st.spinner("Generazione Report Automatico..."):
             doc = fitz.open(stream=file.read(), filetype="pdf")
             text = "".join([page.get_text() for page in doc])[:4000]
             st.session_state.doc_text = text
             
-            # Esegue l'analisi automatica
             summary = auto_analyze(text)
-            st.session_state.messages.append({"role": "assistant", "content": f"✅ **Analisi Automatica Completata:**\n\n{summary}"})
+            st.session_state.messages.append({"role": "assistant", "content": f"📑 **REPORT AUTOMATICO GENERATO:**\n\n{summary}"})
             st.session_state.file_processed = True
             st.rerun()
 
-    if st.button("🗑️ Reset / Nuovo File"):
+    st.divider()
+    
+    # --- SEZIONE SALVATAGGIO ---
+    if st.session_state.messages:
+        st.header("💾 Esporta Risultati")
+        # Prepariamo il testo del report
+        full_report = "--- REPORT RE-WIRE ---\n\n"
+        for m in st.session_state.messages:
+            full_report += f"{m['role'].upper()}: {m['content']}\n\n"
+        
+        st.download_button(
+            label="📥 SCARICA ANALISI (TXT)",
+            data=full_report,
+            file_name="Report_Analisi_REWIRE.txt",
+            mime="text/plain"
+        )
+    
+    if st.button("🗑️ Carica nuovo file"):
         st.session_state.messages = []
         st.session_state.doc_text = ""
         st.session_state.file_processed = False
@@ -73,7 +90,7 @@ for message in st.session_state.messages:
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
 
-if prompt := st.chat_input("Fai una domanda specifica sul documento..."):
+if prompt := st.chat_input("Fai una domanda per approfondire..."):
     st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"):
         st.markdown(prompt)
@@ -82,7 +99,7 @@ if prompt := st.chat_input("Fai una domanda specifica sul documento..."):
         payload = {
             "model": MODEL_ID,
             "messages": [
-                {"role": "system", "content": f"Contesto documento: {st.session_state.doc_text}"},
+                {"role": "system", "content": f"Base dati: {st.session_state.doc_text}"},
                 {"role": "user", "content": prompt}
             ]
         }
@@ -90,3 +107,4 @@ if prompt := st.chat_input("Fai una domanda specifica sul documento..."):
         answer = response.json()['choices'][0]['message']['content']
         st.markdown(answer)
         st.session_state.messages.append({"role": "assistant", "content": answer})
+        st.rerun() # Refresh per aggiornare il file scaricabile con l'ultima risposta
