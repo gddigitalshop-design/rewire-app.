@@ -2,70 +2,84 @@ import streamlit as st
 import requests
 import base64
 
-# --- CONFIGURAZIONE ---
-GROQ_API_KEY = "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"
-MODEL_ID = "llama-3.2-11b-vision-preview" # MODELLO CON OCCHI REALI
-API_URL = "https://api.groq.com/openai/v1/chat/completions"
+# --- CREDENZIALI ---
+API_KEY = "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"
+MODEL_VISION = "llama-3.2-11b-vision-preview"
+URL = "https://api.groq.com/openai/v1/chat/completions"
 
-st.set_page_config(page_title="RE-WIRE AI PRO", layout="wide")
+# --- CONFIGURAZIONE INTERFACCIA ---
+st.set_page_config(page_title="RE-WIRE PRO", layout="wide")
+st.markdown("<h1 style='text-align:center; color:#4facfe;'>⚡ RE-WIRE AI SYSTEM</h1>", unsafe_allow_html=True)
 
-# --- FUNZIONI TECNICHE ---
-def encode_image(image_bytes):
-    return base64.b64encode(image_bytes).decode('utf-8')
+# --- STATO DELLA SESSIONE (MEMORIA) ---
+if "chat_history" not in st.session_state:
+    st.session_state.chat_history = []
+if "img_b64" not in st.session_state:
+    st.session_state.img_b64 = None
 
-# --- INTERFACCIA ---
+# --- SIDEBAR: CARICAMENTO E CONTROLLO ---
 with st.sidebar:
-    st.markdown("# ⚡ DASHBOARD")
-    uploaded_file = st.file_uploader("Carica immagine", type=["jpg", "png", "jpeg"], label_visibility="collapsed")
-    mode = st.radio("Ambiente", ["🏠 Famiglia", "💼 Business", "🔬 Specialista"])
-    if st.button("🗑️ RESET"):
-        st.session_state.clear()
+    st.header("⚙️ Pannello Controllo")
+    file = st.file_uploader("Carica Immagine", type=["jpg", "jpeg", "png"])
+    if file:
+        img_bytes = file.read()
+        st.session_state.img_b64 = base64.b64encode(img_bytes).decode('utf-8')
+        st.image(img_bytes, caption="File pronto")
+    
+    ambiente = st.radio("Seleziona Ambiente", ["Famiglia", "Business", "Specialista"])
+    if st.button("Svuota Memoria"):
+        st.session_state.chat_history = []
+        st.session_state.img_b64 = None
         st.rerun()
 
-if uploaded_file:
-    file_bytes = uploaded_file.read()
-    base64_image = encode_image(file_bytes)
-    
-    col1, col2 = st.columns(2)
-    with col1:
-        st.image(file_bytes, caption="Immagine Caricata")
-    with col2:
-        st.info(f"Modalità {mode} attiva. Analisi visiva in corso...")
+# --- AREA CHAT ---
+for msg in st.session_state.chat_history:
+    with st.chat_message(msg["role"]):
+        st.markdown(msg["content"])
 
-# --- LOGICA CHAT ---
-if "messages" not in st.session_state: st.session_state.messages = []
+if prompt := st.chat_input("Scrivi un comando (es: Ciao, Analizza per un bambino)..."):
+    # Mostra messaggio utente
+    st.session_state.chat_history.append({"role": "user", "content": prompt})
+    with st.chat_message("user"):
+        st.markdown(prompt)
 
-for m in st.session_state.messages:
-    with st.chat_message(m["role"]): st.markdown(m["content"])
-
-if prompt := st.chat_input("Cosa vedi in questa immagine?"):
-    st.session_state.messages.append({"role": "user", "content": prompt})
-    with st.chat_message("user"): st.markdown(prompt)
-
-    if uploaded_file:
-        payload = {
-            "model": MODEL_ID,
-            "messages": [
-                {
-                    "role": "user",
-                    "content": [
-                        {"type": "text", "text": f"Analizza questa immagine come esperto in modalità {mode}. Ignora il nome del file. Descrivi esattamente i soggetti (robot, teschi, persone, ecc.)."},
-                        {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{base64_image}"}},
-                        {"type": "text", "text": prompt}
-                    ]
-                }
-            ]
-        }
+    # Generazione Risposta
+    with st.chat_message("assistant"):
+        # Costruzione del Messaggio per l'IA
+        system_prompt = f"Sei RE-WIRE AI in modalità {ambiente}. Rispondi sempre in italiano. Se l'utente ti saluta, ricambia. Se c'è un'immagine, descrivila fedelmente (se vedi teschio/robot/bambino, parla di quelli, mai di cappelli)."
         
+        # Struttura del contenuto (Testo + eventuale Immagine)
+        payload_content = [{"type": "text", "text": f"{system_prompt}\n\nUtente: {prompt}"}]
+        
+        if st.session_state.img_b64:
+            payload_content.append({
+                "type": "image_url",
+                "image_url": {"url": f"data:image/jpeg;base64,{st.session_state.img_b64}"}
+            })
+
+        # Chiamata API
         try:
-            response = requests.post(API_URL, json=payload, headers={"Authorization": f"Bearer {GROQ_API_KEY}"})
-            res = response.json()
-            if 'choices' in res:
-                ans = res['choices'][0]['message']['content']
-                with st.chat_message("assistant"):
-                    st.markdown(ans)
-                st.session_state.messages.append({"role": "assistant", "content": ans})
+            response = requests.post(
+                URL,
+                headers={"Authorization": f"Bearer {API_KEY}"},
+                json={
+                    "model": MODEL_VISION,
+                    "messages": [{"role": "user", "content": payload_content}],
+                    "temperature": 0.5
+                }
+            )
+            
+            # Controllo Risposta
+            if response.status_code == 200:
+                full_res = response.json()
+                answer = full_res['choices'][0]['message']['content']
+                st.markdown(answer)
+                st.session_state.chat_history.append({"role": "assistant", "content": answer})
             else:
-                st.error("Errore API: Il modello Vision potrebbe essere temporaneamente non disponibile.")
+                st.error(f"Errore API ({response.status_code}): {response.text}")
+        
         except Exception as e:
             st.error(f"Errore di sistema: {e}")
+
+    # Forza il refresh per pulire l'input
+    st.rerun()
