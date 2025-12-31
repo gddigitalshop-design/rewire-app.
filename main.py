@@ -2,65 +2,45 @@ import streamlit as st
 import requests
 import base64
 from PIL import Image
+import io
 
 # ---------------------------------------------------------
-# 1. SETUP UI - DARK MODE PROFESSIONALE
+# 1. SETUP UI - DARK MODE PREMIUM
 # ---------------------------------------------------------
 st.set_page_config(page_title="REWIRE AI PRO", page_icon="⚡", layout="wide")
 
 st.markdown("""
 <style>
-    /* Sfondo scuro per evitare l'effetto accecante */
     .stApp { background-color: #0e1117; color: #ffffff; }
-    
-    /* Sidebar ancora più scura */
     [data-testid="stSidebar"] { background-color: #000000 !important; }
-    
-    /* Messaggi della chat: contrasto elevato */
     [data-testid="stChatMessage"] {
-        background-color: #1e293b !important; /* Blu scuro/grigio */
+        background-color: #1e293b !important;
         border: 1px solid #334155 !important;
         border-radius: 12px !important;
-        margin-bottom: 10px !important;
     }
-
-    /* Testo bianco puro nei messaggi */
-    [data-testid="stChatMessageContent"] p, .stMarkdown p {
-        color: #ffffff !important;
-        font-size: 16px !important;
-    }
-
-    /* BARRA CHAT: Sfondo scuro e bordo colorato per visibilità totale */
+    [data-testid="stChatMessageContent"] p { color: #ffffff !important; }
     [data-testid="stChatInput"] {
-        background-color: #1e293b !important;
         border: 2px solid #6366f1 !important;
-        border-radius: 10px !important;
+        background-color: #1e293b !important;
     }
-    
-    /* Bottoni */
-    .stButton>button {
-        background-color: #6366f1; color: white; border-radius: 8px; border: none;
-    }
+    .stButton>button { background-color: #6366f1; color: white; border-radius: 8px; }
 </style>
 """, unsafe_allow_html=True)
 
 # ---------------------------------------------------------
-# 2. LOGICA DI ACCESSO
+# 2. INIZIALIZZAZIONE
 # ---------------------------------------------------------
-if "auth" not in st.session_state:
-    st.session_state.auth = False
-if "messages" not in st.session_state:
-    st.session_state.messages = []
+if "auth" not in st.session_state: st.session_state.auth = False
+if "messages" not in st.session_state: st.session_state.messages = []
 
-# Sicurezza Chiave API
 try:
     GROQ_API_KEY = st.secrets["GROQ_API_KEY"]
 except:
-    st.error("Configura la chiave API nei Secrets di Streamlit.")
+    st.error("Configura GROQ_API_KEY nei Secrets.")
     st.stop()
 
 # ---------------------------------------------------------
-# 3. SCHERMATA LOGIN
+# 3. LOGIN
 # ---------------------------------------------------------
 if not st.session_state.auth:
     _, col, _ = st.columns([1, 1, 1])
@@ -68,22 +48,20 @@ if not st.session_state.auth:
         st.markdown("<h1 style='text-align: center; color: #6366f1;'>⚡ REWIRE AI</h1>", unsafe_allow_html=True)
         with st.form("login"):
             pwd = st.text_input("Licenza Pro 2026:", type="password")
-            if st.form_submit_button("SBLOCCA SISTEMA"):
+            if st.form_submit_button("SBLOCCA"):
                 if pwd == "rewire2026":
                     st.session_state.auth = True
                     st.rerun()
-                else:
-                    st.error("Password errata.")
+                else: st.error("Password errata.")
     st.stop()
 
 # ---------------------------------------------------------
-# 4. DASHBOARD E SIDEBAR
+# 4. SIDEBAR E CARICAMENTO FILE
 # ---------------------------------------------------------
 with st.sidebar:
     st.title("⚙️ Pannello")
-    st.write("Stato: **Premium**")
-    uploaded_file = st.file_uploader("Allega un file", type=["png", "jpg", "jpeg", "txt"])
-    if st.button("🗑️ Reset Memoria"):
+    uploaded_file = st.file_uploader("Allega un'immagine", type=["png", "jpg", "jpeg"])
+    if st.button("🗑️ Reset Chat"):
         st.session_state.messages = []
         st.rerun()
     if st.button("🚪 Logout"):
@@ -91,36 +69,50 @@ with st.sidebar:
         st.rerun()
 
 # ---------------------------------------------------------
-# 5. CORE CHAT (GROQ)
+# 5. AREA CHAT
 # ---------------------------------------------------------
 st.markdown("<h2 style='color: #6366f1;'>🚀 Smart AI Workspace</h2>", unsafe_allow_html=True)
 
-# Visualizza messaggi
+# Visualizzazione cronologia messaggi (Inclusi i file salvati nello stato)
 for m in st.session_state.messages:
     with st.chat_message(m["role"]):
+        if "image" in m:
+            st.image(m["image"], width=300)
         st.markdown(m["content"])
 
-# Input Barra Chat (Ora perfettamente visibile)
-if prompt := st.chat_input("Digita la tua richiesta qui..."):
-    with st.chat_message("user"):
-        st.markdown(prompt)
-    st.session_state.messages.append({"role": "user", "content": prompt})
-
-    # Verifica Immagine per Vision
+# INPUT CHAT
+if prompt := st.chat_input("Chiedi qualcosa..."):
+    
+    # Prepariamo il dizionario del messaggio utente
+    user_msg = {"role": "user", "content": prompt}
+    
+    # Se c'è un file caricato, lo aggiungiamo al messaggio e lo mostriamo
     img_b64 = None
-    if uploaded_file and any(x in uploaded_file.name.lower() for x in ['jpg','png','jpeg']):
-        img_b64 = base64.b64encode(uploaded_file.getvalue()).decode()
+    if uploaded_file:
+        img_data = uploaded_file.getvalue()
+        user_msg["image"] = img_data # Salviamo i byte per visualizzarli dopo
+        img_b64 = base64.b64encode(img_data).decode()
 
-    # Risposta AI
+    # Mostriamo il messaggio utente immediatamente
+    with st.chat_message("user"):
+        if uploaded_file:
+            st.image(uploaded_file, width=300)
+        st.markdown(prompt)
+    
+    st.session_state.messages.append(user_msg)
+
+    # RISPOSTA AI
     with st.chat_message("assistant"):
-        with st.spinner("Rewire AI sta analizzando..."):
+        with st.spinner("Analisi in corso..."):
             try:
                 model = "llama-3.2-11b-vision-preview" if img_b64 else "llama-3.3-70b-versatile"
                 headers = {"Authorization": f"Bearer {GROQ_API_KEY}"}
                 
-                msgs = [{"role": "system", "content": "Sei Rewire AI. Rispondi in modo professionale in italiano."}]
-                for m in st.session_state.messages[-4:]:
-                    msgs.append({"role": m["role"], "content": m["content"]})
+                # Costruiamo il payload per Groq
+                msgs_payload = [{"role": "system", "content": "Sei Rewire AI, rispondi in italiano."}]
+                # Aggiungiamo cronologia (solo testo per semplicità nelle API, tranne l'ultimo)
+                for m in st.session_state.messages[-4:-1]:
+                    msgs_payload.append({"role": m["role"], "content": m["content"]})
                 
                 if img_b64:
                     content = [
@@ -130,14 +122,4 @@ if prompt := st.chat_input("Digita la tua richiesta qui..."):
                 else:
                     content = prompt
                 
-                msgs.append({"role": "user", "content": content})
-                
-                r = requests.post("https://api.groq.com/openai/v1/chat/completions", 
-                                 headers=headers, 
-                                 json={"model": model, "messages": msgs})
-                
-                ans = r.json()['choices'][0]['message']['content']
-                st.markdown(ans)
-                st.session_state.messages.append({"role": "assistant", "content": ans})
-            except Exception as e:
-                st.error("Errore API. Controlla la chiave nei Secrets.")
+                msgs_
