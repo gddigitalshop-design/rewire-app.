@@ -1,3 +1,4 @@
+
 import streamlit as st
 import requests
 import fitz
@@ -12,71 +13,39 @@ API_URL = "https://api.groq.com/openai/v1/chat/completions"
 # --- CONFIGURAZIONE PAGINA ---
 st.set_page_config(page_title="RE-WIRE AI", layout="wide", page_icon="⚡")
 
-# --- STILE CSS PERSONALIZZATO (IL "MOTORE" GRAFICO) ---
+# --- STILE CSS PERSONALIZZATO ---
 st.markdown("""
     <style>
-    /* Sfondo e Font Generale */
     .stApp {
         background: linear-gradient(135deg, #0f0c29, #302b63, #24243e);
         color: #ffffff;
     }
-    
-    /* Titoli Neon */
     h1, h2, h3 {
-        font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+        font-family: 'Segoe UI', sans-serif;
         background: -webkit-linear-gradient(#00f2fe, #4facfe);
         -webkit-background-clip: text;
         -webkit-text-fill-color: transparent;
         font-weight: 800;
         text-transform: uppercase;
-        letter-spacing: 2px;
     }
-
-    /* Sidebar futuristica */
     [data-testid="stSidebar"] {
         background-color: rgba(0, 0, 0, 0.45);
         border-right: 1px solid rgba(0, 242, 254, 0.3);
         backdrop-filter: blur(15px);
     }
-
-    /* Box Messaggi Chat */
     .stChatMessage {
         background-color: rgba(255, 255, 255, 0.08) !important;
         border-radius: 15px !important;
         border: 1px solid rgba(79, 172, 254, 0.2) !important;
-        margin-bottom: 12px;
-        padding: 15px !important;
-        box-shadow: 2px 2px 10px rgba(0,0,0,0.2);
     }
-
-    /* Campi di Input */
-    .stTextInput > div > div > input {
-        background-color: rgba(0, 0, 0, 0.6) !important;
-        color: #00f2fe !important;
-        border: 1px solid #4facfe !important;
-        border-radius: 10px;
-    }
-
-    /* Bottoni ad alto contrasto */
     .stButton > button {
         background: linear-gradient(90deg, #4facfe 0%, #00f2fe 100%);
         color: #0f0c29 !important;
-        border: none;
         border-radius: 20px;
         font-weight: bold;
-        transition: all 0.3s ease;
         width: 100%;
     }
-    .stButton > button:hover {
-        transform: scale(1.02);
-        box-shadow: 0px 5px 15px rgba(0, 242, 254, 0.4);
-        color: #ffffff !important;
-    }
-    
-    /* Linea di separazione */
-    hr {
-        border-top: 2px solid rgba(79, 172, 254, 0.2);
-    }
+    hr { border-top: 2px solid rgba(79, 172, 254, 0.2); }
     </style>
     """, unsafe_allow_html=True)
 
@@ -85,65 +54,89 @@ if "auth" not in st.session_state:
     st.session_state.auth = False
 
 if not st.session_state.auth:
-    col1, col2, col3 = st.columns([1, 1.5, 1])
-    with col2:
-        st.markdown("<br><br><br>", unsafe_allow_html=True)
-        st.markdown("<h1 style='text-align: center;'>⚡ RE-WIRE AI</h1>", unsafe_allow_html=True)
-        st.markdown("<p style='text-align: center; color: #4facfe;'>Premium Intelligence Access</p>", unsafe_allow_html=True)
-        
+    col_l1, col_l2, col_l3 = st.columns([1, 1.5, 1])
+    with col_l2:
+        st.markdown("<br><br><h1 style='text-align: center;'>⚡ RE-WIRE AI</h1>", unsafe_allow_html=True)
         with st.container(border=True):
-            pwd = st.text_input("Inserisci la Chiave d'Accesso:", type="password")
+            pwd = st.text_input("Chiave d'Accesso:", type="password")
             if st.button("SBLOCCA SISTEMA"):
                 if pwd == "rewire2026":
                     st.session_state.auth = True
                     st.rerun()
                 else:
-                    st.error("Accesso negato. Chiave errata.")
+                    st.error("Chiave errata.")
     st.stop()
 
-# --- INIZIALIZZAZIONE DATI ---
+# --- INIZIALIZZAZIONE ---
 if "messages" not in st.session_state: st.session_state.messages = []
 if "doc_text" not in st.session_state: st.session_state.doc_text = ""
 if "current_file_data" not in st.session_state: st.session_state.current_file_data = None
 
-# --- SIDEBAR (PANNELLO DI CONTROLLO) ---
+# --- SIDEBAR ---
 with st.sidebar:
-    st.markdown("<h2 style='color: #4facfe;'>DASHBOARD</h2>", unsafe_allow_html=True)
-    st.markdown("---")
-    
-    uploaded_file = st.file_uploader("📂 Carica Documento o Foto", type=["pdf", "jpg", "jpeg", "png"])
+    st.markdown("## DASHBOARD")
+    uploaded_file = st.file_uploader("📂 Carica file", type=["pdf", "jpg", "jpeg", "png"])
     
     if uploaded_file:
         if "last_file_name" not in st.session_state or st.session_state.last_file_name != uploaded_file.name:
             st.session_state.messages = []
             st.session_state.last_file_name = uploaded_file.name
-            
             if uploaded_file.type in ["image/jpeg", "image/png"]:
-                img_bytes = uploaded_file.read()
-                st.session_state.current_file_data = {"type": "image", "data": img_bytes, "name": uploaded_file.name}
-                st.session_state.doc_text = f"Analisi immagine: {uploaded_file.name}"
-            elif uploaded_file.type == "application/pdf":
+                st.session_state.current_file_data = {"type": "image", "data": uploaded_file.read(), "name": uploaded_file.name}
+                st.session_state.doc_text = "Analisi immagine caricata."
+            else:
                 doc = fitz.open(stream=uploaded_file.read(), filetype="pdf")
-                text = "".join([p.get_text() for p in doc])[:4000]
-                st.session_state.doc_text = text
-                st.session_state.current_file_data = {"type": "pdf", "data": text, "name": uploaded_file.name}
+                st.session_state.doc_text = "".join([p.get_text() for p in doc])[:4000]
+                st.session_state.current_file_data = {"type": "pdf", "data": st.session_state.doc_text, "name": uploaded_file.name}
             st.rerun()
 
-    st.markdown("<br>", unsafe_allow_html=True)
-    
-    # PULSANTE RESET SELETTIVO (Non cancella il login)
-    if st.button("🗑️ SVUOTA WORKSPACE"):
+    if st.button("🗑️ RESET WORKSPACE"):
         st.session_state.messages = []
         st.session_state.doc_text = ""
         st.session_state.current_file_data = None
-        if "last_file_name" in st.session_state: 
-            del st.session_state.last_file_name
         st.rerun()
 
-# --- AREA CENTRALE: VISUALIZZAZIONE ---
+# --- AREA CENTRALE ---
 st.markdown("<h2 style='text-align: center;'>📄 AREA DOCUMENTI</h2>", unsafe_allow_html=True)
 
-with st.container():
-    if st.session_state.current_file_data:
-        f = st.session_state.current_file_data
-        col_c1, col_c2, col_
+if st.session_state.current_file_data:
+    f = st.session_state.current_file_data
+    # RIGA CORRETTA QUI SOTTO:
+    col_c1, col_c2, col_c3 = st.columns([0.2, 4, 0.2])
+    with col_c2:
+        if f["type"] == "image":
+            st.image(f["data"], use_container_width=True)
+        else:
+            with st.expander("🔍 Testo PDF Estratto"):
+                st.write(f["data"])
+else:
+    st.markdown("<p style='text-align: center; opacity: 0.5;'>Carica un file per iniziare.</p>", unsafe_allow_html=True)
+
+st.divider()
+
+# --- CHAT ---
+for m in st.session_state.messages:
+    with st.chat_message(m["role"]):
+        st.markdown(m["content"])
+
+if prompt := st.chat_input("Chiedi a RE-WIRE AI..."):
+    st.session_state.messages.append({"role": "user", "content": prompt})
+    with st.chat_message("user"):
+        st.markdown(prompt)
+    
+    with st.chat_message("assistant"):
+        payload = {
+            "model": MODEL_ID,
+            "messages": [
+                {"role": "system", "content": f"Sei RE-WIRE AI. Contesto: {st.session_state.doc_text}"},
+                {"role": "user", "content": prompt}
+            ]
+        }
+        try:
+            r = requests.post(API_URL, json=payload, headers={"Authorization": f"Bearer {GROQ_API_KEY}"})
+            ans = r.json()['choices'][0]['message']['content']
+        except:
+            ans = "Errore AI."
+        st.markdown(ans)
+        st.session_state.messages.append({"role": "assistant", "content": ans})
+        st.rerun()
