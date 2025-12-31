@@ -15,33 +15,10 @@ if not API_KEY:
     st.stop()
 
 URL = "https://api.groq.com/openai/v1/chat/completions"
-MODEL = "llama-3.2-90b-vision-instant"
+MODEL = "llama-3.2-11b-vision-preview"   # MODELLO CORRETTO
 
 st.set_page_config(page_title="RE-WIRE AI", layout="wide")
 
-# ========================================================
-#               TEMA CHIARO MODERNO
-# ========================================================
-st.markdown(
-    """
-    <style>
-    body, .block-container {
-        background-color: #F3F4F9;
-        color: #111 !important;
-    }
-    h1, h2, h3, p {
-        color: #111 !important;
-    }
-    .stButton>button {
-        background-color: #4B6FFF;
-        color: white;
-        border-radius: 10px;
-        padding: 0.5em 1em;
-    }
-    </style>
-    """,
-    unsafe_allow_html=True
-)
 
 # ========================================================
 #               FUNZIONE PREPARA IMMAGINE
@@ -53,8 +30,9 @@ def prepare_image(uploaded_file):
     img.save(buf, format="JPEG")
     return base64.b64encode(buf.getvalue()).decode("utf-8")
 
+
 # ========================================================
-#               INIZIALIZZAZIONE SESSIONE
+#               SESSIONE
 # ========================================================
 if "chat" not in st.session_state:
     st.session_state.chat = []
@@ -62,78 +40,20 @@ if "chat" not in st.session_state:
 if "img" not in st.session_state:
     st.session_state.img = None
 
-if "project_name" not in st.session_state:
-    st.session_state.project_name = ""
+
+
 
 # ========================================================
-#               HEADER
-# ========================================================
-st.markdown("<h1 style='text-align:center; color:#6A5ACD;'>⚡ RE-WIRE AI</h1>", unsafe_allow_html=True)
-st.markdown("<p style='text-align:center; color:#666;'>Descrizione immagini + risoluzione problemi quotidiani</p>", unsafe_allow_html=True)
-st.write("---")
-
-# ========================================================
-#                    SIDEBAR
+#               SIDEBAR
 # ========================================================
 with st.sidebar:
-    st.header("📁 Gestione progetto")
-    st.session_state.project_name = st.text_input("Nome progetto", value=st.session_state.project_name)
-
-    if st.button("💾 Salva progetto"):
-        if st.session_state.project_name.strip():
-            data = {"chat": st.session_state.chat, "img": st.session_state.img}
-            with open(f"{st.session_state.project_name}.json", "w", encoding="utf-8") as f:
-                json.dump(data, f, ensure_ascii=False)
-            st.success("Progetto salvato!")
-
-    if st.button("📂 Carica progetto"):
-        filename = f"{st.session_state.project_name}.json"
-        if os.path.exists(filename):
-            with open(filename, "r", encoding="utf-8") as f:
-                data = json.load(f)
-                st.session_state.chat = data.get("chat", [])
-                st.session_state.img = data.get("img", None)
-            st.success("Progetto caricato!")
-            st.rerun()
-        else:
-            st.error("Progetto non trovato.")
-
-    st.write("---")
-    st.header("🖼 Analisi Immagine")
     file = st.file_uploader("Carica immagine", type=["jpg", "jpeg", "png"])
     if file:
         st.session_state.img = prepare_image(file)
         st.image(file, caption="Immagine caricata", use_column_width=True)
 
-    st.write("---")
-    if st.button("🔄 Reset chat"):
-        st.session_state.chat = []
-        st.session_state.img = None
-        st.rerun()
 
-# ========================================================
-#                TEMPLATES
-# ========================================================
-st.subheader("📌 Template veloci")
-c1, c2, c3, c4, c5 = st.columns(5)
 
-if c1.button("👪 Famiglia"):
-    st.session_state.chat.append({"role": "user", "content": "Fammi un piano settimanale per la famiglia."})
-    st.rerun()
-if c2.button("💼 Lavoro"):
-    st.session_state.chat.append({"role": "user", "content": "Organizza il mio lavoro giornaliero."})
-    st.rerun()
-if c3.button("🎨 Hobby"):
-    st.session_state.chat.append({"role": "user", "content": "Suggerisci un nuovo hobby creativo."})
-    st.rerun()
-if c4.button("🥗 Dieta"):
-    st.session_state.chat.append({"role": "user", "content": "Crea un piano alimentare settimanale."})
-    st.rerun()
-if c5.button("❓ Problemi"):
-    st.session_state.chat.append({"role": "user", "content": "Aiutami a risolvere un problema quotidiano."})
-    st.rerun()
-
-st.write("---")
 
 # ========================================================
 #                  CHAT ESISTENTE
@@ -142,42 +62,65 @@ for msg in st.session_state.chat:
     with st.chat_message(msg["role"]):
         st.write(msg["content"])
 
+
+
+
 # ========================================================
 #                 NUOVO MESSAGGIO
 # ========================================================
-prompt = st.chat_input("Scrivi qui il tuo messaggio...")
+prompt = st.chat_input("Scrivi qui...")
 
 if prompt:
     st.session_state.chat.append({"role": "user", "content": prompt})
 
     with st.chat_message("assistant"):
         try:
+
+            # BLOCCO MESSAGGIO
             content_block = [{"type": "text", "text": prompt}]
+
+            # SE C'È UN'IMMAGINE, LA AGGIUNGO NEL FORMATO CORRETTO
             if st.session_state.img:
-                content_block.append({
-                    "type": "input_image",
-                    "image_url": f"data:image/jpeg;base64,{st.session_state.img}"
-                })
+                content_block.append(
+                    {
+                        "type": "image_url",
+                        "image_url": {
+                            "url": f"data:image/jpeg;base64,{st.session_state.img}"
+                        }
+                    }
+                )
 
             payload = {
                 "model": MODEL,
-                "messages": [{"role": "user", "content": content_block}],
+                "messages": [
+                    {
+                        "role": "user",
+                        "content": content_block
+                    }
+                ],
                 "temperature": 0.4
             }
 
+            # CHIAMATA
             r = requests.post(
                 URL,
                 headers={"Authorization": f"Bearer {API_KEY}"},
-                json=payload,
-                timeout=20
+                json=payload
             )
 
+            # ERRORE API?
             if r.status_code != 200:
-                st.error(f"Errore modello: {r.status_code}")
-            else:
-                ans = r.json()["choices"][0]["message"]["content"]
-                st.write(ans)
-                st.session_state.chat.append({"role": "assistant", "content": ans})
+                st.error(f"❌ Errore modello: {r.status_code}")
+                st.write(r.text)
+                st.stop()
+
+            # RISPOSTA
+            ans = r.json()["choices"][0]["message"]["content"]
+            st.write(ans)
+
+            st.session_state.chat.append(
+                {"role": "assistant", "content": ans}
+            )
 
         except Exception as e:
             st.error(f"Errore: {e}")
