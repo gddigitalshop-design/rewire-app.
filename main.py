@@ -1,7 +1,7 @@
 import streamlit as st
 import requests
 import fitz
-import time
+import io
 
 # --- CONFIGURAZIONE ---
 GROQ_API_KEY = "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"
@@ -26,14 +26,14 @@ if "messages" not in st.session_state: st.session_state.messages = []
 if "doc_text" not in st.session_state: st.session_state.doc_text = ""
 if "file_processed" not in st.session_state: st.session_state.file_processed = False
 
-# --- FUNZIONE ANALISI AUTOMATICA ---
+# --- FUNZIONE ANALISI ---
 def auto_analyze(text):
     headers = {"Authorization": f"Bearer {GROQ_API_KEY}"}
     payload = {
         "model": MODEL_ID,
         "messages": [
-            {"role": "system", "content": "Sei un analista esperto. Estrai i punti chiave, scadenze e dati numerici dal documento."},
-            {"role": "user", "content": f"Analizza questo documento: {text}"}
+            {"role": "system", "content": "Sei un analista esperto. Estrai i punti chiave e i dati principali."},
+            {"role": "user", "content": f"Documento: {text}"}
         ],
         "temperature": 0.2
     }
@@ -41,55 +41,56 @@ def auto_analyze(text):
         response = requests.post(API_URL, json=payload, headers=headers)
         return response.json()['choices'][0]['message']['content']
     except:
-        return "Errore durante l'analisi."
+        return "Errore nell'analisi."
 
 # --- INTERFACCIA ---
 st.title("🧠 RE-WIRE Intelligence")
 
 with st.sidebar:
-    st.header("📁 Caricamento Documento")
-    file = st.file_uploader("Trascina qui il PDF", type=["pdf"])
+    st.header("📁 Caricamento")
+    file = st.file_uploader("Carica il PDF", type=["pdf"])
     
-    # Analisi Automatica al caricamento
     if file and not st.session_state.file_processed:
-        with st.spinner("Generazione Report Automatico..."):
+        with st.spinner("Generazione Report..."):
             doc = fitz.open(stream=file.read(), filetype="pdf")
-            text = "".join([page.get_text() for page in doc])[:4000]
-            st.session_state.doc_text = text
-            
-            summary = auto_analyze(text)
-            st.session_state.messages.append({"role": "assistant", "content": f"📑 **REPORT AUTOMATICO GENERATO:**\n\n{summary}"})
+            st.session_state.doc_text = "".join([page.get_text() for page in doc])[:4000]
+            summary = auto_analyze(st.session_state.doc_text)
+            st.session_state.messages.append({"role": "assistant", "content": summary})
             st.session_state.file_processed = True
             st.rerun()
 
-    st.divider()
-    
-    # --- SEZIONE SALVATAGGIO ---
-    if st.session_state.messages:
-        st.header("💾 Esporta Risultati")
-        # Prepariamo il testo del report
-        full_report = "--- REPORT RE-WIRE ---\n\n"
-        for m in st.session_state.messages:
-            full_report += f"{m['role'].upper()}: {m['content']}\n\n"
-        
-        st.download_button(
-            label="📥 SCARICA ANALISI (TXT)",
-            data=full_report,
-            file_name="Report_Analisi_REWIRE.txt",
-            mime="text/plain"
-        )
-    
-    if st.button("🗑️ Carica nuovo file"):
+    if st.button("🗑️ Carica Nuovo File"):
         st.session_state.messages = []
         st.session_state.doc_text = ""
         st.session_state.file_processed = False
         st.rerun()
 
-# --- CHAT AREA ---
+# --- AREA CHAT E DOWNLOAD ---
+if st.session_state.messages:
+    # Mostriamo l'ultimo report generato
+    st.subheader("📊 Analisi Documento")
+    
+    # Prepariamo il testo per il download
+    full_report = "--- REPORT RE-WIRE ---\n\n"
+    for m in st.session_state.messages:
+        full_report += f"{m['role'].upper()}: {m['content']}\n\n"
+
+    # PULSANTE DI SALVATAGGIO SEMPRE VISIBILE IN ALTO
+    st.download_button(
+        label="📥 SALVA ANALISI SU PC/CELLULARE",
+        data=full_report,
+        file_name="Analisi_REWIRE.txt",
+        mime="text/plain",
+        key="download_btn" # Chiave univoca per evitare errori
+    )
+    st.divider()
+
+# Visualizzazione messaggi
 for message in st.session_state.messages:
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
 
+# Chat interattiva
 if prompt := st.chat_input("Fai una domanda per approfondire..."):
     st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"):
@@ -99,12 +100,8 @@ if prompt := st.chat_input("Fai una domanda per approfondire..."):
         payload = {
             "model": MODEL_ID,
             "messages": [
-                {"role": "system", "content": f"Base dati: {st.session_state.doc_text}"},
+                {"role": "system", "content": f"Contesto: {st.session_state.doc_text}"},
                 {"role": "user", "content": prompt}
             ]
         }
-        response = requests.post(API_URL, json=payload, headers={"Authorization": f"Bearer {GROQ_API_KEY}"})
-        answer = response.json()['choices'][0]['message']['content']
-        st.markdown(answer)
-        st.session_state.messages.append({"role": "assistant", "content": answer})
-        st.rerun() # Refresh per aggiornare il file scaricabile con l'ultima risposta
+        res = requests
