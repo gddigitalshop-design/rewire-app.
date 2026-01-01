@@ -102,10 +102,23 @@ with col_pdf:
     st.markdown("#### 📁 File Input")
     uploaded_file = st.file_uploader("Carica PDF", type=["pdf"])
     pdf_text = ""
-    if uploaded_file:
-        reader = PyPDF2.PdfReader(uploaded_file)
-        pdf_text = "\n".join([p.extract_text() for p in reader.pages if p.extract_text()])
-        st.success("Documento letto.")
+    # Cerca questa parte nel tuo codice e sostituiscila
+if uploaded_file and uploaded_file.type == "application/pdf":
+    reader = PyPDF2.PdfReader(uploaded_file)
+    testo_estratto = []
+    for p in reader.pages:
+        testo_estratto.append(p.extract_text())
+    
+    pdf_text = "\n".join(testo_estratto)
+    
+    # --- AGGIUNGI QUESTO TAGLIO DI SICUREZZA ---
+    # Limita il testo a circa 30.000 caratteri (circa 8.000 token) 
+    # per stare dentro i limiti di Groq
+    if len(pdf_text) > 30000:
+        pdf_text = pdf_text[:30000] + "\n... (testo troncato per limiti di dimensione) ..."
+        st.warning("⚠️ Il PDF è molto lungo. Ho analizzato solo le prime pagine per garantire la risposta.")
+    else:
+        st.success("Documento letto con successo.")
 
 user_query = st.chat_input("Chiedi a Rewire...")
 final_query = user_query or st.session_state.get("active_prompt")
@@ -122,3 +135,4 @@ with col_chat:
     for m in st.session_state.messages:
         with st.chat_message(m["role"]):
             st.markdown(m["content"])
+
