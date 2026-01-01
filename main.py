@@ -1,6 +1,24 @@
+import subprocess
+import sys
+
+# Funzione per installare i moduli mancanti automaticamente
+def install(package):
+    subprocess.check_call([sys.executable, "-m", "pip", "install", package])
+
+try:
+    import groq
+except ImportError:
+    install('groq')
+    import groq
+
+try:
+    import PyPDF2
+except ImportError:
+    install('PyPDF2')
+    import PyPDF2
+
 import streamlit as st
-import groq
-import PyPDF2
+# ... il resto del codice che ti ho dato prima ...
 
 # --- CONFIGURAZIONE PAGINA ---
 st.set_page_config(page_title="REWIRE AI - Factory", layout="wide", initial_sidebar_state="expanded")
@@ -167,3 +185,4 @@ if prompt_to_send:
         st.session_state.messages.append({"role": "assistant", "content": risposta})
     
     st.rerun()
+
