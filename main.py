@@ -1,91 +1,101 @@
 import streamlit as st
 import pandas as pd
 import groq
+import PyPDF2
 from streamlit_gsheets import GSheetsConnection
 
 # 1. CONFIGURAZIONE PAGINA
 st.set_page_config(page_title="REWIRE AI - Factory", layout="wide", page_icon="🧠")
 
-# --- STILE CSS PERSONALIZZATO (Il tuo design) ---
+# --- CSS: IL TUO DESIGN ---
 st.markdown("""
     <style>
     .stApp { background-color: #0e1117; color: #ffffff; }
     [data-testid="stSidebar"] { background-color: #161b22; border-right: 1px solid #ff4b4b33; }
-    .main-logo { text-align: center; padding: 50px; }
-    .main-logo h1 { color: #ff4b4b; font-size: 4rem; letter-spacing: 2px; margin-bottom: 0; }
-    .main-logo p { font-size: 1.2rem; letter-spacing: 8px; color: #888; }
-    div.stButton > button { border-radius: 5px; height: 3em; width: 100%; transition: all 0.3s; }
-    div.stButton > button:hover { border-color: #ff4b4b; color: #ff4b4b; background-color: #ff4b4b1a; }
+    .main-logo { text-align: center; padding: 30px; }
+    .main-logo h1 { color: #ff4b4b; font-size: 3.5rem; margin-bottom: 0; }
+    div.stButton > button { border-radius: 5px; height: 3em; width: 100%; }
     </style>
 """, unsafe_allow_html=True)
 
-# --- FUNZIONI DATABASE ---
+# --- FUNZIONI CORE ---
 def get_user_db():
     try:
         conn = st.connection("gsheets", type=GSheetsConnection)
-        df = conn.read(ttl=0)
-        df.columns = df.columns.str.strip().str.lower() # Normalizza colonne
-        return df
-    except Exception as e:
+        return conn.read(ttl=0)
+    except:
         return pd.DataFrame(columns=['username', 'password'])
 
-# --- GESTIONE SESSIONE ---
+def extract_pdf_text(file):
+    pdf_reader = PyPDF2.PdfReader(file)
+    text = ""
+    for page in pdf_reader.pages:
+        text += page.extract_text()
+    return text
+
+# --- LOGICA ACCESSO ---
 if "logged_in" not in st.session_state:
     st.session_state["logged_in"] = False
 
-# --- LOGICA DI ACCESSO ---
 if not st.session_state["logged_in"]:
     st.markdown('<div class="main-logo"><h1>🧠 REWIRE AI</h1><p>FACTORY ACCESS</p></div>', unsafe_allow_html=True)
-    
     col1, col2, col3 = st.columns([1,2,1])
     with col2:
-        with st.container(border=True):
-            u = st.text_input("Username").strip()
-            p = st.text_input("Password", type="password").strip()
-            if st.button("ENTRA NEL SISTEMA"):
-                db = get_user_db()
-                user_match = db[db['username'].astype(str).str.lower() == u.lower()]
-                if not user_match.empty and str(user_match['password'].values[0]) == p:
-                    st.session_state["logged_in"] = True
-                    st.session_state["user_active"] = u
-                    st.rerun()
-                else:
-                    st.error("Credenziali non valide")
+        u = st.text_input("Username")
+        p = st.text_input("Password", type="password")
+        if st.button("ENTRA"):
+            db = get_user_db()
+            if u in db['username'].values and str(db[db['username']==u]['password'].values[0]) == p:
+                st.session_state["logged_in"] = True
+                st.session_state["user_active"] = u
+                st.rerun()
+            else:
+                st.error("Credenziali errate")
     st.stop()
 
-# --- 2. INTERFACCIA APP DOPO LOGIN (Tutto quello che mancava) ---
+# --- INTERFACCIA DOPO LOGIN ---
 
-# SIDEBAR CON LOGO E PULSANTI
-with st.sidebar:
-    st.markdown("<h2 style='color: #ff4b4b;'>FACTORY MENU</h2>", unsafe_allow_html=True)
-    st.write(f"👤 Operatore: **{st.session_state['user_active'].upper()}**")
-    st.markdown("---")
-    
-    # Pulsanti che avevamo messo
-    st.button("📁 ARCHIVIO PROGETTI")
-    st.button("📊 ANALISI DATI")
-    st.button("⚙️ IMPOSTAZIONI")
-    
-    st.markdown("---")
-    if st.button("🔴 LOGOUT"):
-        st.session_state["logged_in"] = False
-        st.rerun()
-
-# LOGO CENTRALE (Scompare quando inizia la chat)
-if "messages" not in st.session_state or not st.session_state.messages:
-    st.markdown('<div class="main-logo"><h1>🧠 REWIRE AI</h1><p>FACTORY EDITION</p></div>', unsafe_allow_html=True)
-else:
-    st.markdown("<h3 style='color: #ff4b4b;'>REWIRE AI Chat</h3>", unsafe_allow_html=True)
-
-# GESTIONE CHAT
+# Inizializzazione variabili di stato
 if "messages" not in st.session_state:
     st.session_state.messages = []
+if "pdf_context" not in st.session_state:
+    st.session_state.pdf_context = ""
+
+# SIDEBAR (Pulsanti e Caricamento)
+with st.sidebar:
+    st.markdown("<h2 style='color: #ff4b4b;'>FACTORY MENU</h2>", unsafe_allow_html=True)
+    st.write(f"👤: {st.session_state.user_active.upper()}")
+    
+    st.markdown("---")
+    # CARICAMENTO FILE (Ripristinato)
+    uploaded_file = st.file_uploader("📁 CARICA DOCUMENTO PDF", type=["pdf"])
+    if uploaded_file:
+        with st.spinner("Analisi documento..."):
+            st.session_state.pdf_context = extract_pdf_text(uploaded_file)
+            st.success("Documento pronto per l'analisi!")
+
+    st.markdown("---")
+    # PULSANTI (Ora funzionanti come azioni)
+    if st.button("📊 ANALISI DATI"):
+        st.session_state.messages.append({"role": "user", "content": "Esegui un'analisi dei dati correnti."})
+    
+    if st.button("🗑️ CANCELLA CHAT"):
+        st.session_state.messages = []
+        st.rerun()
+
+    if st.button("🔴 LOGOUT"):
+        st.session_state.logged_in = False
+        st.rerun()
+
+# AREA CHAT CENTRALE
+if not st.session_state.messages:
+    st.markdown('<div class="main-logo"><h1>🧠 REWIRE AI</h1><p>FACTORY EDITION</p></div>', unsafe_allow_html=True)
 
 for m in st.session_state.messages:
     with st.chat_message(m["role"]):
         st.markdown(m["content"])
 
-if prompt := st.chat_input("Inserisci comando..."):
+if prompt := st.chat_input("Chiedi all'AI o carica un PDF..."):
     st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"):
         st.markdown(prompt)
@@ -93,12 +103,18 @@ if prompt := st.chat_input("Inserisci comando..."):
     with st.chat_message("assistant"):
         try:
             client = groq.Client(api_key=st.secrets["GROQ_API_KEY"])
+            
+            # Uniamo il testo del PDF alla domanda se presente
+            full_prompt = prompt
+            if st.session_state.pdf_context:
+                full_prompt = f"Contesto del documento: {st.session_state.pdf_context}\n\nDomanda: {prompt}"
+
             resp = client.chat.completions.create(
                 model="llama-3.3-70b-versatile",
-                messages=[{"role": m["role"], "content": m["content"]} for m in st.session_state.messages]
+                messages=[{"role": "user", "content": full_prompt}]
             )
             risposta = resp.choices[0].message.content
             st.markdown(risposta)
             st.session_state.messages.append({"role": "assistant", "content": risposta})
         except Exception as e:
-            st.error("Errore di connessione al cervello AI.")
+            st.error("Errore AI. Controlla la tua GROQ_API_KEY nei Secrets.")
