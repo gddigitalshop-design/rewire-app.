@@ -25,24 +25,36 @@ if "messages" not in st.session_state: st.session_state.messages = []
 # Funzione per chiamare Groq
 def call_rewire_brain(user_input, pdf_context=""):
     try:
-        api_key = st.secrets["GROQ_API_KEY"] # Usa la chiave salvata ieri
-        headers = {"Authorization": f"Bearer {api_key}"}
+        # 1. Recupero chiave
+        if "GROQ_API_KEY" not in st.secrets:
+            return "ERRORE: Chiave API non trovata nei Secrets di Streamlit!"
         
-        full_prompt = f"Contesto Documento: {pdf_context}\n\nRichiesta: {user_input}"
+        api_key = st.secrets["GROQ_API_KEY"]
+        headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
         
+        # 2. Preparazione Payload
         payload = {
             "model": "llama-3.3-70b-versatile",
             "messages": [
-                {"role": "system", "content": "Sei Rewire AI. Sei un assistente professionale, empatico e risolutivo. Crea tabelle, traduzioni e report pronti all'uso."},
-                {"role": "user", "content": full_prompt}
-            ],
-            "temperature": 0.5
+                {"role": "system", "content": "Sei Rewire AI, un assistente accogliente e professionale."},
+                {"role": "user", "content": f"CONTESTO: {pdf_context}\n\nDOMANDA: {user_input}"}
+            ]
         }
         
+        # 3. Chiamata
         r = requests.post("https://api.groq.com/openai/v1/chat/completions", headers=headers, json=payload)
-        return r.json()['choices'][0]['message']['content']
+        response_json = r.json()
+
+        # 4. Debug - Se non c'è 'choices', dimmi cosa ha risposto il server
+        if 'choices' in response_json:
+            return response_json['choices'][0]['message']['content']
+        else:
+            # Questo ti dirà se la chiave è sbagliata o se il modello non esiste
+            messaggio_errore = response_json.get('error', {}).get('message', 'Errore sconosciuto dal server')
+            return f"⚠️ IL CERVELLO DICE: {messaggio_errore}"
+            
     except Exception as e:
-        return f"Errore di connessione al cervello Rewire: {e}"
+        return f"❌ ERRORE DI SISTEMA: {str(e)}"
 
 # --- 3. LOGIN ---
 if not st.session_state.auth:
@@ -114,3 +126,4 @@ with col_chat:
     for m in st.session_state.messages:
         with st.chat_message(m["role"]):
             st.markdown(m["content"])
+
