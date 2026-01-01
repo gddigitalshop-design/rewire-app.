@@ -1,26 +1,59 @@
 import streamlit as st
 import groq
+from streamlit_gsheets import GSheetsConnection
 
-# TEST VELOCE SENZA DATABASE PER VEDERE SE IL MOTORE GIRA
-st.title("🧠 REWIRE AI - Factory")
+# CONFIGURAZIONE
+st.set_page_config(page_title="REWIRE AI - Factory", layout="wide")
 
-# Inserisci la tua chiave direttamente qui tra le virgolette per sbloccare subito
-# Esempio: client = groq.Client(api_key="gsk_xxxx")
-api_key_test = st.text_input("Inserisci qui la tua chiave Groq per sbloccare l'app:", type="password")
+# FUNZIONE DATABASE (Google Sheets)
+def check_login(user, pwd):
+    try:
+        conn = st.connection("gsheets", type=GSheetsConnection)
+        df = conn.read(ttl=0)
+        # Controlla se le credenziali esistono nel foglio
+        for index, row in df.iterrows():
+            if str(row['username']).strip() == user and str(row['password']).strip() == pwd:
+                return True
+        return False
+    except:
+        return False
 
-if api_key_test:
-    client = groq.Client(api_key=api_key_test)
-    prompt = st.chat_input("Chiedi qualcosa...")
+# SESSIONE
+if "logged_in" not in st.session_state:
+    st.session_state.logged_in = False
+
+# SCHERMATA LOGIN (Quella che vedrà il tuo cliente)
+if not st.session_state.logged_in:
+    st.title("🧠 REWIRE AI - Factory")
+    st.subheader("Accesso Riservato")
+    u = st.text_input("Username")
+    p = st.text_input("Password", type="password")
     
-    if prompt:
-        with st.chat_message("user"):
-            st.write(prompt)
-        with st.chat_message("assistant"):
-            try:
-                chat_completion = client.chat.completions.create(
-                    model="llama-3.3-70b-versatile",
-                    messages=[{"role": "user", "content": prompt}]
-                )
-                st.write(chat_completion.choices[0].message.content)
-            except Exception as e:
-                st.error(f"Errore: {e}")
+    if st.button("ACCEDI"):
+        if check_login(u, p):
+            st.session_state.logged_in = True
+            st.rerun()
+        else:
+            st.error("Credenziali non valide. Contatta l'amministratore.")
+    st.stop()
+
+# --- SE SEI QUI, IL LOGIN HA FUNZIONATO ---
+st.title("🚀 REWIRE AI - Operativo")
+st.success(f"Benvenuto nel sistema, sessione attiva.")
+
+# CHAT AI
+if prompt := st.chat_input("Invia un comando all'AI..."):
+    with st.chat_message("user"):
+        st.write(prompt)
+    
+    with st.chat_message("assistant"):
+        try:
+            # Qui usiamo la chiave che hai messo nei Secrets
+            client = groq.Client(api_key=st.secrets["GROQ_API_KEY"])
+            resp = client.chat.completions.create(
+                model="llama-3.3-70b-versatile",
+                messages=[{"role": "user", "content": prompt}]
+            )
+            st.write(resp.choices[0].message.content)
+        except Exception as e:
+            st.error("Errore di connessione. Verifica la GROQ_API_KEY nei Secrets di Streamlit.")
