@@ -1,121 +1,153 @@
 import streamlit as st
 import requests
 import base64
+from PIL import Image
+import io
+import PyPDF2
 
-# 1. SETUP UI
-st.set_page_config(page_title="REWIRE AI PRO", page_icon="⚡", layout="wide")
+# --- CONFIGURAZIONE E STILE AVANZATO ---
+st.set_page_config(page_title="REWIRE AI - Group 4.0", page_icon="⚡", layout="wide")
 
 st.markdown("""
 <style>
-    .stApp { background-color: #0e1117; color: #ffffff; }
-    [data-testid="stSidebar"] { background-color: #000000 !important; }
-    [data-testid="stChatMessage"] { background-color: #1e293b !important; border-radius: 12px !important; }
-    [data-testid="stChatInput"] { border: 2px solid #6366f1 !important; }
-    .stButton>button { background-color: #6366f1; color: white; border-radius: 8px; }
+    /* Sfondo con gradiente per dare vita alla pagina */
+    .stApp {
+        background: linear-gradient(135deg, #0f172a 0%, #1e1e2f 100%);
+        color: #e2e8f0;
+    }
+    
+    /* Sidebar elegante */
+    [data-testid="stSidebar"] { background-color: rgba(0,0,0,0.5) !important; }
+
+    /* Bolle della chat stilizzate */
+    .stChatMessage {
+        border-radius: 20px !important;
+        padding: 15px !important;
+        margin-bottom: 10px !important;
+        border: 1px solid rgba(255,255,255,0.1) !important;
+    }
+    
+    /* Centratura automatica immagini */
+    .stImage > img {
+        border-radius: 15px;
+        display: block;
+        margin-left: auto;
+        margin-right: auto;
+        box-shadow: 0px 10px 30px rgba(0,0,0,0.5);
+    }
+
+    /* Barra chat evidenziata */
+    [data-testid="stChatInput"] {
+        border: 2px solid #6366f1 !important;
+        border-radius: 25px !important;
+        background-color: #1e293b !important;
+    }
 </style>
 """, unsafe_allow_html=True)
 
-# 2. INIZIALIZZAZIONE
+# --- INIZIALIZZAZIONE ---
 if "auth" not in st.session_state: st.session_state.auth = False
 if "messages" not in st.session_state: st.session_state.messages = []
 
 try:
     GROQ_API_KEY = st.secrets["GROQ_API_KEY"]
 except:
-    st.error("Configura GROQ_API_KEY nei Secrets.")
+    st.error("Configura la chiave API.")
     st.stop()
 
-# 3. LOGIN (Essenziale per la vendita/affitto)
+# --- LOGIN ---
 if not st.session_state.auth:
     _, col, _ = st.columns([1, 1, 1])
     with col:
-        st.markdown("<h1 style='text-align: center;'>⚡ REWIRE AI</h1>", unsafe_allow_html=True)
+        st.markdown("<h1 style='text-align: center; color: #6366f1;'>⚡ REWIRE PRO</h1>", unsafe_allow_html=True)
         with st.form("login"):
-            pwd = st.text_input("Password Licenza:", type="password")
-            if st.form_submit_button("ACCEDI"):
+            pwd = st.text_input("Licenza Group 4.0:", type="password")
+            if st.form_submit_button("SBLOCCA"):
                 if pwd == "rewire2026":
                     st.session_state.auth = True
                     st.rerun()
                 else: st.error("Password errata.")
     st.stop()
 
-# 4. SIDEBAR
+# --- FUNZIONE LETTURA PDF ---
+def read_pdf(file):
+    pdf_reader = PyPDF2.PdfReader(file)
+    text = ""
+    for page in pdf_reader.pages:
+        text += page.extract_text()
+    return text
+
+# --- SIDEBAR ---
 with st.sidebar:
-    st.title("⚙️ Pannello")
-    uploaded_file = st.file_uploader("Allega immagine", type=["png", "jpg", "jpeg"])
-    if st.button("🗑️ Reset Chat"):
+    st.title("📂 Area File")
+    st.info("Versione: Group 4.0 (Active)")
+    uploaded_file = st.file_uploader("Carica PDF o Immagine", type=["pdf", "png", "jpg", "jpeg"])
+    
+    if st.button("🗑️ Svuota Chat"):
         st.session_state.messages = []
         st.rerun()
 
-# 5. STORICO CHAT
+# --- AREA CHAT ---
+st.markdown("<h2 style='text-align: center;'>🚀 Smart Workspace</h2>", unsafe_allow_html=True)
+
+# Visualizzazione cronologia
 for m in st.session_state.messages:
     with st.chat_message(m["role"]):
-        if "image" in m: st.image(m["image"], width=300)
+        if "image" in m: st.image(m["image"], use_container_width=True)
         st.markdown(m["content"])
 
-# 6. LOGICA DI RISPOSTA STABILE
-if prompt := st.chat_input("Chiedi a Rewire..."):
-    user_msg = {"role": "user", "content": prompt}
+# --- LOGICA INPUT ---
+if prompt := st.chat_input("Scrivi qui o descrivi il file caricato..."):
+    
+    user_payload = {"role": "user", "content": prompt}
     img_b64 = None
-    
+    context_text = ""
+
+    # Gestione automatica del file caricato
     if uploaded_file:
-        img_data = uploaded_file.getvalue()
-        user_msg["image"] = img_data
-        img_b64 = base64.b64encode(img_data).decode()
+        file_type = uploaded_file.type
+        
+        # Se è un'immagine
+        if "image" in file_type:
+            img_data = uploaded_file.getvalue()
+            user_payload["image"] = img_data # La salva per mostrarla
+            img_b64 = base64.b64encode(img_data).decode()
+        
+        # Se è un PDF
+        elif "pdf" in file_type:
+            with st.spinner("Lettura PDF..."):
+                context_text = read_pdf(uploaded_file)
+                prompt = f"Analizza questo documento: {context_text}\n\nDomanda utente: {prompt}"
 
+    # Visualizzazione immediata
     with st.chat_message("user"):
-        if uploaded_file: st.image(uploaded_file, width=300)
-        st.markdown(prompt)
+        if "image" in user_payload:
+            st.image(user_payload["image"], caption="File caricato", use_container_width=True)
+        st.markdown(prompt if not context_text else "📄 Documento PDF inviato con successo.")
     
-    st.session_state.messages.append(user_msg)
+    st.session_state.messages.append(user_payload)
 
+    # RISPOSTA AI
     with st.chat_message("assistant"):
-        with st.spinner("Rewire sta elaborando..."):
-            # MODELLI STABILI PER IL 2026
-            # Tentiamo prima con il modello vision più recente
-            vision_model = "llama-3.2-11b-vision-preview"
-            text_model = "llama-3.3-70b-versatile"
-            
-            selected_model = vision_model if img_b64 else text_model
-            
-            headers = {"Authorization": f"Bearer {GROQ_API_KEY}"}
-            api_msgs = [{"role": "system", "content": "Sei Rewire AI, rispondi in italiano."}]
-            for m in st.session_state.messages[-5:-1]:
-                api_msgs.append({"role": m["role"], "content": m["content"]})
-            
-            content = [{"type": "text", "text": prompt}, {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{img_b64}"}}] if img_b64 else prompt
-            api_msgs.append({"role": "user", "content": content})
-
+        with st.spinner("Elaborazione..."):
             try:
-                resp = requests.post(
-                    "https://api.groq.com/openai/v1/chat/completions",
-                    headers=headers,
-                    json={"model": selected_model, "messages": api_msgs},
-                    timeout=20
-                )
-                data = resp.json()
-
-                if "choices" in data:
-                    ans = data['choices'][0]['message']['content']
-                    st.markdown(ans)
-                    st.session_state.messages.append({"role": "assistant", "content": ans})
+                model = "llama-3.2-11b-vision-preview" if img_b64 else "llama-3.3-70b-versatile"
+                headers = {"Authorization": f"Bearer {GROQ_API_KEY}"}
+                
+                api_msgs = [{"role": "system", "content": "Sei Rewire AI Group 4.0. Sei professionale e preciso."}]
+                for m in st.session_state.messages[-3:-1]:
+                    api_msgs.append({"role": m["role"], "content": m["content"]})
+                
+                if img_b64:
+                    content = [{"type": "text", "text": prompt}, {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{img_b64}"}}]
                 else:
-                    # GESTIONE DINAMICA DEL CAMBIO MODELLO
-                    error_msg = data.get("error", {}).get("message", "")
-                    if "decommissioned" in error_msg or "not found" in error_msg:
-                        # Se il modello Vision è offline, forza il modello solo testo immediatamente
-                        st.warning("Ottimizzazione modello in corso... procedo con analisi standard.")
-                        resp_fallback = requests.post(
-                            "https://api.groq.com/openai/v1/chat/completions",
-                            headers=headers,
-                            json={"model": text_model, "messages": [{"role": "user", "content": prompt}]},
-                            timeout=20
-                        )
-                        ans = resp_fallback.json()['choices'][0]['message']['content']
-                        st.markdown(ans)
-                        st.session_state.messages.append({"role": "assistant", "content": ans})
-                    else:
-                        st.error(f"Errore: {error_msg}")
-            except Exception as e:
-                st.error(f"Errore di rete: {e}")
+                    content = prompt
+                
+                api_msgs.append({"role": "user", "content": content})
 
+                r = requests.post("https://api.groq.com/openai/v1/chat/completions", headers=headers, json={"model": model, "messages": api_msgs})
+                ans = r.json()['choices'][0]['message']['content']
+                st.markdown(ans)
+                st.session_state.messages.append({"role": "assistant", "content": ans})
+            except:
+                st.error("Errore di connessione al cervello AI.")
