@@ -2,37 +2,18 @@ import streamlit as st
 import requests
 import base64
 import PyPDF2
-import io
 
-# --- 1. SETUP UI: DESIGN PREMIUM ---
+# --- 1. CONFIGURAZIONE UI ---
 st.set_page_config(page_title="REWIRE AI - Group 4.0", page_icon="⚡", layout="wide")
 
 st.markdown("""
 <style>
-    .stApp {
-        background: linear-gradient(160deg, #0f172a 0%, #1e1b4b 100%);
-        color: #f8fafc;
-    }
-    .main-logo {
-        font-size: 3rem !important;
-        font-weight: 800;
-        background: -webkit-linear-gradient(#818cf8, #6366f1);
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-        text-align: center;
-        margin-bottom: 0px;
-    }
-    [data-testid="stChatMessage"] {
-        background: rgba(255, 255, 255, 0.07) !important;
-        backdrop-filter: blur(15px);
-        border-radius: 15px !important;
-    }
-    [data-testid="stFileUploadDropzone"] {
-        border: 2px dashed #6366f1 !important;
-        background: rgba(99, 102, 241, 0.05) !important;
-        border-radius: 20px !important;
-    }
-    h3 { color: #818cf8 !important; text-align: center; }
+    .stApp { background: linear-gradient(160deg, #0f172a 0%, #1e1b4b 100%); color: #f8fafc; }
+    .header-box { text-align: center; padding: 20px; border-bottom: 1px solid rgba(99, 102, 241, 0.3); }
+    .main-logo { font-size: 3.5rem !important; font-weight: 800; background: linear-gradient(to right, #818cf8, #6366f1); -webkit-background-clip: text; -webkit-text-fill-color: transparent; margin: 0; }
+    [data-testid="stChatMessage"] { background: rgba(255, 255, 255, 0.05) !important; border-radius: 15px !important; }
+    /* Nasconde l'etichetta dell'uploader per un look più pulito */
+    .stFileUploader label { display: none; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -40,121 +21,100 @@ st.markdown("""
 if "auth" not in st.session_state: st.session_state.auth = False
 if "messages" not in st.session_state: st.session_state.messages = []
 
-try:
-    GROQ_API_KEY = st.secrets["GROQ_API_KEY"]
-except:
-    st.error("Errore: Chiave API Groq non trovata.")
-    st.stop()
-
 if not st.session_state.auth:
     _, col, _ = st.columns([1, 1.2, 1])
     with col:
-        st.markdown("<p class='main-logo'>⚡ REWIRE PRO</p>", unsafe_allow_html=True)
+        st.markdown("<h1 style='text-align:center;'>⚡ REWIRE PRO</h1>", unsafe_allow_html=True)
         pwd = st.text_input("Licenza Group 4.0 (2026):", type="password")
         if st.button("SBLOCCA SISTEMA"):
-            if pwd == "rewire2026": #
+            if pwd == "rewire2026":
                 st.session_state.auth = True
                 st.rerun()
             else: st.error("Licenza non valida.")
     st.stop()
 
-# --- 3. FUNZIONI UTILI ---
-def get_pdf_text(file):
-    try:
-        reader = PyPDF2.PdfReader(file)
-        return "\n".join([page.extract_text() for page in reader.pages])
-    except: return ""
+# --- 3. HEADER FISSO ---
+st.markdown("<div class='header-box'><p class='main-logo'>REWIRE AI</p><p style='color:#94a3b8;'>Intelligence & Recovery System</p></div>", unsafe_allow_html=True)
 
-def prepare_download_text(messages):
-    report = "--- REWIRE AI - REPORT SESSIONE ---\n\n"
-    for m in messages:
-        role = "UTENTE" if m["role"] == "user" else "REWIRE AI"
-        report += f"{role}: {m['content']}\n\n"
-    return report
-
-# --- 4. SIDEBAR FISSA ---
+# --- 4. SIDEBAR (Solo Reset e Download) ---
 with st.sidebar:
-    st.markdown("<h2 style='text-align:left;'>📂 Pannello</h2>", unsafe_allow_html=True)
-    # Se la chat è già avviata, l'uploader rimane qui
-    sidebar_file = st.file_uploader("Carica nuovo documento", type=["pdf", "png", "jpg", "jpeg"], key="side_up")
-    
-    st.markdown("---")
-    if st.session_state.messages:
-        st.download_button("💾 SALVA REPORT", data=prepare_download_text(st.session_state.messages), file_name="report_rewire.txt")
-    
-    if st.button("🗑️ RESET"):
+    st.title("📂 Gestione Sessione")
+    if st.button("🗑️ Reset Totale"):
         st.session_state.messages = []
         st.rerun()
+    if st.session_state.messages:
+        report = "\n".join([f"{m['role'].upper()}: {m['content']}" for m in st.session_state.messages])
+        st.download_button("💾 Salva Analisi", report, file_name="report_rewire.txt")
 
-# --- 5. LAYOUT CENTRALE ---
-st.markdown("<p class='main-logo'>REWIRE AI</p>", unsafe_allow_html=True)
-st.markdown("<h3>Analizzatore Intelligente Group 4.0</h3>", unsafe_allow_html=True)
+# --- 5. UNICO CARICAMENTO FILE (CENTRALE) ---
+# Questo è l'unico uploader dell'app. Appare sotto il logo.
+st.markdown("<p style='text-align:center; margin-top:10px;'>Trascina qui il documento da analizzare (PDF o Immagine)</p>", unsafe_allow_html=True)
+c1, c2, c3 = st.columns([1, 2, 1])
+with c2:
+    uploaded_file = st.file_uploader("Upload", type=["pdf", "png", "jpg", "jpeg"], key="single_uploader")
 
-# AREA DI BENVENUTO E UPLOAD CENTRALE (solo se chat vuota)
-main_file = None
-if not st.session_state.messages:
-    _, center_col, _ = st.columns([1, 2, 1])
-    with center_col:
-        st.write("### Benvenuto. Carica un file per iniziare l'analisi.")
-        main_file = st.file_uploader("Trascina qui il tuo file (PDF o Immagine)", type=["pdf", "png", "jpg", "jpeg"], key="main_up")
-
-# Unifichiamo il file caricato (o dalla sidebar o dal centro)
-active_file = main_file if main_file else sidebar_file
-
-# Visualizzazione Chat
+# --- 6. VISUALIZZAZIONE STORICO CHAT ---
 for m in st.session_state.messages:
     with st.chat_message(m["role"]):
-        if "image" in m: st.image(m["image"], width=500)
+        if "image" in m: st.image(m["image"], width=450)
         st.markdown(m["content"])
 
-# --- 6. BARRA DI CHAT (SEMPRE PRESENTE) ---
+# --- 7. LOGICA CHAT ---
 if prompt := st.chat_input("Chiedi a Rewire..."):
+    # Messaggio Utente
     user_msg = {"role": "user", "content": prompt}
-    img_b64 = None
-    pdf_context = ""
     
-    if active_file:
-        if active_file.type == "application/pdf":
-            pdf_context = get_pdf_text(active_file)
+    # Processamento File (se presente al momento dell'invio)
+    pdf_text = ""
+    img_b64 = None
+    
+    if uploaded_file:
+        if uploaded_file.type == "application/pdf":
+            try:
+                reader = PyPDF2.PdfReader(uploaded_file)
+                pdf_text = "\n".join([p.extract_text() for p in reader.pages if p.extract_text()])
+            except: st.error("Errore lettura PDF")
         else:
-            img_bytes = active_file.getvalue()
+            img_bytes = uploaded_file.getvalue()
             user_msg["image"] = img_bytes
             img_b64 = base64.b64encode(img_bytes).decode()
 
     st.session_state.messages.append(user_msg)
-    st.rerun() # Aggiorna la UI per mostrare il messaggio dell'utente
-
-# Logica Risposta AI (se l'ultimo messaggio è dell'utente)
-if st.session_state.messages and st.session_state.messages[-1]["role"] == "user":
-    last_msg = st.session_state.messages[-1]
+    
+    # Generazione Risposta AI
     with st.chat_message("assistant"):
-        with st.spinner("Analisi in corso..."):
+        with st.spinner("Rewire sta elaborando..."):
             try:
-                model = "llama-3.2-11b-vision-preview" if "image" in last_msg else "llama-3.3-70b-versatile"
+                api_key = st.secrets["GROQ_API_KEY"]
+                headers = {"Authorization": f"Bearer {api_key}"}
+                model = "llama-3.2-11b-vision-preview" if img_b64 else "llama-3.3-70b-versatile"
                 
-                # Recuperiamo il contesto PDF se presente nel file attivo
-                final_prompt = last_msg["content"]
-                if active_file and active_file.type == "application/pdf":
-                    pdf_context = get_pdf_text(active_file)
-                    final_prompt = f"CONTESTO PDF:\n{pdf_context}\n\nDOMANDA: {last_msg['content']}"
-
-                headers = {"Authorization": f"Bearer {GROQ_API_KEY}"}
-                msgs_api = [{"role": "system", "content": "Sei Rewire AI. Rispondi in modo professionale."}]
-                
-                # Payload per immagine o testo
-                if "image" in last_msg:
-                    b64 = base64.b64encode(last_msg["image"]).decode()
-                    content = [{"type": "text", "text": last_msg["content"]}, 
-                               {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{b64}"}}]
+                # Costruzione del contenuto
+                if pdf_text:
+                    content_ai = f"CONTESTO DOCUMENTO:\n{pdf_text}\n\nDOMANDA: {prompt}"
+                elif img_b64:
+                    content_ai = [{"type": "text", "text": prompt}, {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{img_b64}"}}]
                 else:
-                    content = final_prompt
+                    content_ai = prompt
 
-                msgs_api.append({"role": "user", "content": content})
-                r = requests.post("https://api.groq.com/openai/v1/chat/completions", headers=headers, json={"model": model, "messages": msgs_api})
-                ans = r.json()['choices'][0]['message']['content']
+                r = requests.post(
+                    "https://api.groq.com/openai/v1/chat/completions",
+                    headers=headers,
+                    json={
+                        "model": model,
+                        "messages": [
+                            {"role": "system", "content": "Sei Rewire AI Group 4.0. Rispondi in italiano professionale."},
+                            {"role": "user", "content": content_ai}
+                        ]
+                    }
+                )
                 
-                st.markdown(ans)
-                st.session_state.messages.append({"role": "assistant", "content": ans})
-                st.rerun()
-            except:
-                st.error("Connessione ai circuiti fallita.")
+                if r.status_code == 200:
+                    ans = r.json()['choices'][0]['message']['content']
+                    st.markdown(ans)
+                    st.session_state.messages.append({"role": "assistant", "content": ans})
+                    st.rerun()
+                else:
+                    st.error(f"Errore API: {r.status_code}")
+            except Exception as e:
+                st.error("Connessione ai circuiti fallita. Verifica la configurazione.")
