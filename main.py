@@ -4,7 +4,7 @@ import base64
 import PyPDF2
 import io
 
-# --- 1. SETUP UI: DESIGN PREMIUM & VIVO ---
+# --- 1. SETUP UI: DESIGN PREMIUM ---
 st.set_page_config(page_title="REWIRE AI - Group 4.0", page_icon="⚡", layout="wide")
 
 st.markdown("""
@@ -13,58 +13,44 @@ st.markdown("""
         background: linear-gradient(160deg, #0f172a 0%, #1e1b4b 100%);
         color: #f8fafc;
     }
-    
+    .main-logo {
+        font-size: 3rem !important;
+        font-weight: 800;
+        background: -webkit-linear-gradient(#818cf8, #6366f1);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        text-align: center;
+        margin-bottom: 0px;
+    }
     [data-testid="stChatMessage"] {
         background: rgba(255, 255, 255, 0.07) !important;
         backdrop-filter: blur(15px);
-        border: 1px solid rgba(255, 255, 255, 0.1) !important;
         border-radius: 15px !important;
     }
-
-    /* Area di caricamento stile "Isola di Rame" */
     [data-testid="stFileUploadDropzone"] {
         border: 2px dashed #6366f1 !important;
         background: rgba(99, 102, 241, 0.05) !important;
         border-radius: 20px !important;
-        transition: all 0.3s ease;
     }
-    [data-testid="stFileUploadDropzone"]:hover {
-        border-color: #818cf8 !important;
-        background: rgba(99, 102, 241, 0.1) !important;
-    }
-
-    .stImage > img {
-        display: block;
-        margin-left: auto;
-        margin-right: auto;
-        border-radius: 15px;
-        border: 2px solid #6366f1;
-    }
-
-    [data-testid="stChatInput"] {
-        border-radius: 20px !important;
-        border: 1px solid #6366f1 !important;
-    }
-    
-    h1, h2, h3 { color: #818cf8 !important; text-align: center; }
+    h3 { color: #818cf8 !important; text-align: center; }
 </style>
 """, unsafe_allow_html=True)
 
-# --- 2. LOGICA DI ACCESSO & SESSIONE ---
+# --- 2. LOGICA DI ACCESSO ---
 if "auth" not in st.session_state: st.session_state.auth = False
 if "messages" not in st.session_state: st.session_state.messages = []
 
 try:
     GROQ_API_KEY = st.secrets["GROQ_API_KEY"]
 except:
-    st.error("Errore: Chiave API Groq non trovata nei Secrets.")
+    st.error("Errore: Chiave API Groq non trovata.")
     st.stop()
 
 if not st.session_state.auth:
     _, col, _ = st.columns([1, 1.2, 1])
     with col:
-        st.markdown("<h1>⚡ REWIRE PRO</h1>", unsafe_allow_html=True)
-        pwd = st.text_input("Licenza Group 4.0:", type="password")
+        st.markdown("<p class='main-logo'>⚡ REWIRE PRO</p>", unsafe_allow_html=True)
+        pwd = st.text_input("Licenza Group 4.0 (2026):", type="password")
         if st.button("SBLOCCA SISTEMA"):
             if pwd == "rewire2026": #
                 st.session_state.auth = True
@@ -72,34 +58,103 @@ if not st.session_state.auth:
             else: st.error("Licenza non valida.")
     st.stop()
 
-# --- 3. FUNZIONI DI SERVIZIO ---
+# --- 3. FUNZIONI UTILI ---
 def get_pdf_text(file):
     try:
         reader = PyPDF2.PdfReader(file)
-        text = ""
-        for page in reader.pages:
-            text += page.extract_text() + "\n"
-        return text
+        return "\n".join([page.extract_text() for page in reader.pages])
     except: return ""
 
 def prepare_download_text(messages):
     report = "--- REWIRE AI - REPORT SESSIONE ---\n\n"
     for m in messages:
         role = "UTENTE" if m["role"] == "user" else "REWIRE AI"
-        report += f"{role}:\n{m['content']}\n\n"
+        report += f"{role}: {m['content']}\n\n"
     return report
 
-# --- 4. SIDEBAR (LOGICA DINAMICA) ---
+# --- 4. SIDEBAR FISSA ---
 with st.sidebar:
-    st.title("📂 Risorse")
-    st.info("Rewire: Gestione Documenti")
-    
-    # Se ci sono messaggi, l'uploader si sposta qui per lasciare spazio alla chat
-    file = None
-    if st.session_state.messages:
-        file = st.file_uploader("Carica File aggiuntivi", type=["pdf", "png", "jpg", "jpeg"], key="sidebar_up")
+    st.markdown("<h2 style='text-align:left;'>📂 Pannello</h2>", unsafe_allow_html=True)
+    # Se la chat è già avviata, l'uploader rimane qui
+    sidebar_file = st.file_uploader("Carica nuovo documento", type=["pdf", "png", "jpg", "jpeg"], key="side_up")
     
     st.markdown("---")
-    st.subheader("💾 Gestione Lavoro")
     if st.session_state.messages:
-        report_data = prepare_download_
+        st.download_button("💾 SALVA REPORT", data=prepare_download_text(st.session_state.messages), file_name="report_rewire.txt")
+    
+    if st.button("🗑️ RESET"):
+        st.session_state.messages = []
+        st.rerun()
+
+# --- 5. LAYOUT CENTRALE ---
+st.markdown("<p class='main-logo'>REWIRE AI</p>", unsafe_allow_html=True)
+st.markdown("<h3>Analizzatore Intelligente Group 4.0</h3>", unsafe_allow_html=True)
+
+# AREA DI BENVENUTO E UPLOAD CENTRALE (solo se chat vuota)
+main_file = None
+if not st.session_state.messages:
+    _, center_col, _ = st.columns([1, 2, 1])
+    with center_col:
+        st.write("### Benvenuto. Carica un file per iniziare l'analisi.")
+        main_file = st.file_uploader("Trascina qui il tuo file (PDF o Immagine)", type=["pdf", "png", "jpg", "jpeg"], key="main_up")
+
+# Unifichiamo il file caricato (o dalla sidebar o dal centro)
+active_file = main_file if main_file else sidebar_file
+
+# Visualizzazione Chat
+for m in st.session_state.messages:
+    with st.chat_message(m["role"]):
+        if "image" in m: st.image(m["image"], width=500)
+        st.markdown(m["content"])
+
+# --- 6. BARRA DI CHAT (SEMPRE PRESENTE) ---
+if prompt := st.chat_input("Chiedi a Rewire..."):
+    user_msg = {"role": "user", "content": prompt}
+    img_b64 = None
+    pdf_context = ""
+    
+    if active_file:
+        if active_file.type == "application/pdf":
+            pdf_context = get_pdf_text(active_file)
+        else:
+            img_bytes = active_file.getvalue()
+            user_msg["image"] = img_bytes
+            img_b64 = base64.b64encode(img_bytes).decode()
+
+    st.session_state.messages.append(user_msg)
+    st.rerun() # Aggiorna la UI per mostrare il messaggio dell'utente
+
+# Logica Risposta AI (se l'ultimo messaggio è dell'utente)
+if st.session_state.messages and st.session_state.messages[-1]["role"] == "user":
+    last_msg = st.session_state.messages[-1]
+    with st.chat_message("assistant"):
+        with st.spinner("Analisi in corso..."):
+            try:
+                model = "llama-3.2-11b-vision-preview" if "image" in last_msg else "llama-3.3-70b-versatile"
+                
+                # Recuperiamo il contesto PDF se presente nel file attivo
+                final_prompt = last_msg["content"]
+                if active_file and active_file.type == "application/pdf":
+                    pdf_context = get_pdf_text(active_file)
+                    final_prompt = f"CONTESTO PDF:\n{pdf_context}\n\nDOMANDA: {last_msg['content']}"
+
+                headers = {"Authorization": f"Bearer {GROQ_API_KEY}"}
+                msgs_api = [{"role": "system", "content": "Sei Rewire AI. Rispondi in modo professionale."}]
+                
+                # Payload per immagine o testo
+                if "image" in last_msg:
+                    b64 = base64.b64encode(last_msg["image"]).decode()
+                    content = [{"type": "text", "text": last_msg["content"]}, 
+                               {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{b64}"}}]
+                else:
+                    content = final_prompt
+
+                msgs_api.append({"role": "user", "content": content})
+                r = requests.post("https://api.groq.com/openai/v1/chat/completions", headers=headers, json={"model": model, "messages": msgs_api})
+                ans = r.json()['choices'][0]['message']['content']
+                
+                st.markdown(ans)
+                st.session_state.messages.append({"role": "assistant", "content": ans})
+                st.rerun()
+            except:
+                st.error("Connessione ai circuiti fallita.")
