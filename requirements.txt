@@ -2,3 +2,4 @@ streamlit
 requests
 Pillow
 pymupdf
+pip install PyPDF2
