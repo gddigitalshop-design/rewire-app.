@@ -78,20 +78,48 @@ if not st.session_state.auth:
                 st.rerun()
     st.stop()
 
-# --- 4. SIDEBAR ---
+# --- 4. COLONNA FUNZIONI (SIDEBAR) ---
 with st.sidebar:
     st.markdown("### 🏭 FABBRICA DIGITALE")
     
-    # Mostra lo stato della connessione sotto il titolo
+    # Stato del sistema (per tuo controllo)
     st.caption(f"Status: {test_connection()}")
     
     st.markdown("---")
+    
+    # Tasti Azione Rapida
     if st.button("🥗 Crea Tabella Dieta"):
         st.session_state.active_prompt = "Crea un foglio organizzazione pasti e progressi dieta professionale in tabella."
+        
     if st.button("🌐 Traduzione Pro"):
         st.session_state.active_prompt = "Traduci il testo o il documento caricato in modo professionale."
+        
     if st.button("📋 Analisi Contratto"):
         st.session_state.active_prompt = "Analizza i punti critici di questo documento e riassumili."
+
+    st.markdown("---")
+    st.markdown("### 💾 GESTIONE LAVORO")
+
+    # TASTO SALVA: Compare solo se ci sono messaggi nella chat
+    if st.session_state.messages:
+        # Prepariamo il testo da scaricare
+        report = ""
+        for m in st.session_state.messages:
+            ruolo = "UTENTE" if m['role'] == "user" else "REWIRE AI"
+            report += f"{ruolo}:\n{m['content']}\n\n{'='*30}\n\n"
+        
+        st.download_button(
+            label="💾 SCARICA RISULTATO",
+            data=report,
+            file_name="prodotto_rewire.txt",
+            mime="text/plain"
+        )
+    
+    # TASTO CANCELLA: Sempre visibile se c'è almeno un messaggio
+    if st.session_state.messages:
+        if st.button("🗑️ CANCELLA TUTTO", use_container_width=True):
+            st.session_state.messages = []
+            st.rerun()
 
 # --- 5. PAGINA CENTRALE ---
 # (Il resto del tuo codice per la visualizzazione della chat...)
@@ -135,4 +163,5 @@ with col_chat:
     for m in st.session_state.messages:
         with st.chat_message(m["role"]):
             st.markdown(m["content"])
+
 
