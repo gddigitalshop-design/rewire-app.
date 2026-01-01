@@ -118,3 +118,4 @@ if prompt := st.chat_input("Chiedi a Rewire..."):
                         st.error(f"Errore: {error_msg}")
             except Exception as e:
                 st.error(f"Errore di rete: {e}")
+
