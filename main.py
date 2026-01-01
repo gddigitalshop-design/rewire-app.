@@ -1,31 +1,56 @@
 import streamlit as st
-import groq
-import PyPDF2
+import pandas as pd
+# Serve una libreria per connettersi a Google Sheets facilmente
+# (Aggiungi 'st-gsheets-connection' nel tuo requirements.txt)
+from stripr.gsheetsconnection import GSheetsConnection
 
-# --- 1. LOGIN E SICUREZZA ---
-def check_password():
-    def password_entered():
-        # Verifica se l'utente e la password esistono nei Secrets
-        if (
-            st.session_state["username"] in st.secrets["passwords"]
-            and st.session_state["password"] == st.secrets["passwords"][st.session_state["username"]]
-        ):
-            st.session_state["password_correct"] = True
-            del st.session_state["password"]
-            del st.session_state["username"]
-        else:
-            st.session_state["password_correct"] = False
+# --- FUNZIONE PER GESTIRE IL DATABASE UTENTI ---
+def get_user_db():
+    conn = st.connection("gsheets", type=GSheetsConnection)
+    return conn.read(worksheet="Foglio1")
 
-    if "password_correct" not in st.session_state:
-        st.markdown("<div style='text-align:center;margin-top:100px;'><h1 style='color:#ff4b4b;font-size:4rem;'>🧠 REWIRE AI</h1><p style='color:#888;letter-spacing:5px;'>FACTORY EDITION</p></div>", unsafe_allow_html=True)
-        col1, col2, col3 = st.columns([1,2,1])
-        with col2:
-            st.text_input("Username", on_change=password_entered, key="username")
-            st.text_input("Password", type="password", on_change=password_entered, key="password")
-            if "password_correct" in st.session_state and not st.session_state["password_correct"]:
-                st.error("❌ Credenziali errate")
-        return False
+def save_new_user(username, password):
+    conn = st.connection("gsheets", type=GSheetsConnection)
+    df = get_user_db()
+    
+    if username in df['username'].values:
+        return False # Utente esiste già
+    
+    new_data = pd.DataFrame([{"username": username, "password": password}])
+    updated_df = pd.concat([df, new_data], ignore_index=True)
+    conn.update(worksheet="Foglio1", data=updated_df)
     return True
+
+# --- INTERFACCIA DI ACCESSO ---
+def login_signup_page():
+    st.title("🧠 REWIRE AI - Accesso")
+    
+    tab1, tab2 = st.tabs(["Login", "Registrati"])
+    
+    with tab1:
+        u = st.text_input("Username", key="l_user")
+        p = st.text_input("Password", type="password", key="l_pass")
+        if st.button("Entra"):
+            db = get_user_db()
+            if u in db['username'].values and str(db.loc[db['username'] == u, 'password'].values[0]) == p:
+                st.session_state["logged_in"] = True
+                st.session_state["user_active"] = u
+                st.rerun()
+            else:
+                st.error("Credenziali errate")
+
+    with tab2:
+        st.subheader("Crea il tuo account")
+        new_u = st.text_input("Scegli Username", key="r_user")
+        new_p = st.text_input("Scegli Password", type="password", key="r_pass")
+        if st.button("Registrati ora"):
+            if new_u and new_p:
+                if save_new_user(new_u, new_p):
+                    st.success("Account creato! Ora puoi fare il Login.")
+                else:
+                    st.warning("Questo username è già occupato.")
+            else:
+                st.error("Compila tutti i campi.")
 
 if check_password():
     # --- 2. CONFIGURAZIONE PAGINA (Solo dopo il login) ---
@@ -124,3 +149,4 @@ if check_password():
             risposta = call_rewire_brain(prompt_to_send, pdf_text)
             st.session_state.messages.append({"role": "assistant", "content": risposta})
         st.rerun()
+
