@@ -36,22 +36,30 @@ if "active_prompt" not in st.session_state:
 # --- FUNZIONE LOGICA AI (CON CONNESSIONE SICURA) ---
 def call_rewire_brain(query, context=""):
     try:
-        # Usa i Secrets di Streamlit per la sicurezza della licenza
         api_key = st.secrets["GROQ_API_KEY"]
         client = groq.Client(api_key=api_key) 
         
-        full_prompt = f"Contesto documento: {context}\n\nDomanda utente: {query}" if context else query
+        # COSTRUZIONE DELLA MEMORIA: Passiamo tutta la cronologia dei messaggi
+        history = []
+        # Aggiungiamo il contesto del file se presente
+        if context:
+            history.append({"role": "system", "content": f"Contesto file: {context}"})
         
+        # Aggiungiamo i messaggi passati per dare memoria all'IA
+        for m in st.session_state.messages:
+            history.append({"role": m["role"], "content": m["content"]})
+        
+        # Aggiungiamo la domanda attuale
+        history.append({"role": "user", "content": query})
+
         completion = client.chat.completions.create(
             model="llama-3.3-70b-versatile",
-            messages=[{"role": "user", "content": full_prompt}],
+            messages=history, # Ora passiamo TUTTA la storia, non solo l'ultimo!
             temperature=0.5,
         )
         return completion.choices[0].message.content
-    except KeyError:
-        return "Errore: Chiave API non trovata nei Secrets del server."
     except Exception as e:
-        return f"Errore di connessione: {str(e)}"
+        return f"Errore di memoria/connessione: {str(e)}"
 
 # --- SIDEBAR (PANNELLO DI CONTROLLO PULITO) ---
 with st.sidebar:
@@ -154,3 +162,4 @@ if prompt_to_send:
         risposta = call_rewire_brain(prompt_to_send, pdf_text)
         st.session_state.messages.append({"role": "assistant", "content": risposta})
     st.rerun()
+
