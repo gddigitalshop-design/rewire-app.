@@ -1,35 +1,14 @@
-import subprocess
-import sys
-
-# Funzione per installare i moduli mancanti automaticamente
-def install(package):
-    subprocess.check_call([sys.executable, "-m", "pip", "install", package])
-
-try:
-    import groq
-except ImportError:
-    install('groq')
-    import groq
-
-try:
-    import PyPDF2
-except ImportError:
-    install('PyPDF2')
-    import PyPDF2
-
 import streamlit as st
-# ... il resto del codice che ti ho dato prima ...
+import groq
+import PyPDF2
 
 # --- CONFIGURAZIONE PAGINA ---
 st.set_page_config(page_title="REWIRE AI - Factory", layout="wide", initial_sidebar_state="expanded")
 
-# --- CSS PER PERSONALIZZAZIONE ESTETICA ---
+# --- CSS PER PERSONALIZZAZIONE ESTETICA (TITOLO ROSSO E SIDEBAR) ---
 st.markdown("""
     <style>
-    /* Sfondo e font generale */
     .stApp { background-color: #0e1117; color: #ffffff; }
-    
-    /* Personalizzazione Sidebar */
     [data-testid="stSidebar"] { background-color: #161b22; border-right: 1px solid #ff4b4b33; }
     
     /* Bottoni Sidebar */
@@ -37,16 +16,13 @@ st.markdown("""
         border-radius: 5px;
         height: 3em;
         transition: all 0.3s;
+        width: 100%;
     }
     
-    /* Stile specifico per il tasto RESET (Rosso) */
-    div.stButton > button:contains("RESET") {
-        border-color: #ff4b4b;
-        color: #ff4b4b;
-    }
+    /* Hover specifico per il tasto RESET */
     div.stButton > button:contains("RESET"):hover {
-        background-color: #ff4b4b;
-        color: white;
+        border-color: #ff4b4b !important;
+        color: #ff4b4b !important;
     }
     </style>
 """, unsafe_allow_html=True)
@@ -57,44 +33,41 @@ if "messages" not in st.session_state:
 if "active_prompt" not in st.session_state:
     st.session_state.active_prompt = None
 
-# --- FUNZIONE LOGICA AI ---
+# --- FUNZIONE LOGICA AI (CON CONNESSIONE SICURA) ---
 def call_rewire_brain(query, context=""):
-    # Inserisci qui la tua Chiave API Groq
-    client = groq.Client(api_key="TUA_CHIAVE_API_QUI") 
-    
-    full_prompt = f"Contesto: {context}\n\nDomanda: {query}" if context else query
-    
     try:
+        # Usa i Secrets di Streamlit per la sicurezza della licenza
+        api_key = st.secrets["GROQ_API_KEY"]
+        client = groq.Client(api_key=api_key) 
+        
+        full_prompt = f"Contesto documento: {context}\n\nDomanda utente: {query}" if context else query
+        
         completion = client.chat.completions.create(
             model="llama-3.3-70b-versatile",
             messages=[{"role": "user", "content": full_prompt}],
             temperature=0.5,
         )
         return completion.choices[0].message.content
+    except KeyError:
+        return "Errore: Chiave API non trovata nei Secrets del server."
     except Exception as e:
         return f"Errore di connessione: {str(e)}"
 
-# --- SIDEBAR (PANNELLO DI CONTROLLO) ---
+# --- SIDEBAR (PANNELLO DI CONTROLLO PULITO) ---
 with st.sidebar:
     st.markdown("### 🛠️ STRUMENTI")
     
-    # 1. CARICAMENTO FILE
+    # 1. CARICAMENTO FILE (NELLA SIDEBAR COME RICHIESTO)
     uploaded_file = st.file_uploader("📁 CARICA PDF O IMMAGINE", type=["pdf", "png", "jpg", "jpeg"])
     pdf_text = ""
     
     if uploaded_file:
         if uploaded_file.type == "application/pdf":
             reader = PyPDF2.PdfReader(uploaded_file)
-            testo_raw = "\n".join([p.extract_text() for p in reader.pages if p.extract_text()])
-            # Limite per non mandare in crash l'API
-            if len(testo_raw) > 25000:
-                pdf_text = testo_raw[:25000]
-                st.warning("⚠️ Documento lungo: Analisi parziale attivata.")
-            else:
-                pdf_text = testo_raw
-                st.success("✅ Documento Letto")
+            pdf_text = "\n".join([p.extract_text() for p in reader.pages if p.extract_text()])
+            st.success("✅ PDF Letto")
         else:
-            st.image(uploaded_file, caption="Anteprima", use_container_width=True)
+            st.image(uploaded_file, caption="Immagine caricata", use_container_width=True)
             st.info("📸 Immagine Pronta")
 
     st.markdown("---")
@@ -104,17 +77,16 @@ with st.sidebar:
     col_a, col_b = st.columns(2)
     with col_a:
         if st.button("🥗 DIETA", use_container_width=True):
-            st.session_state.active_prompt = "Crea una tabella dieta professionale basata sul testo o sulle mie info."
+            st.session_state.active_prompt = "Crea una tabella dieta professionale basata sui dati forniti."
     with col_b:
         if st.button("🌐 TRADUCI", use_container_width=True):
             st.session_state.active_prompt = "Traduci il testo fornito in modo tecnico e professionale."
 
     st.markdown("---")
 
-    # 3. GESTIONE LAVORO (SALVA E CANCELLA)
+    # 3. GESTIONE LAVORO (SALVA E CANCELLA SEMPRE VISIBILI)
     st.markdown("### 💾 GESTIONE")
     
-    # Recupero ultimo lavoro per il download
     ultimo_lavoro = ""
     if st.session_state.messages:
         for m in reversed(st.session_state.messages):
@@ -122,11 +94,11 @@ with st.sidebar:
                 ultimo_lavoro = m['content']
                 break
 
-    report_content = f"REWIRE AI - FACTORY REPORT\n{'='*30}\n\n" + (ultimo_lavoro if ultimo_lavoro else "Nessun dato generato.")
+    report_pulp = f"REWIRE AI - FACTORY REPORT\n{'='*30}\n\n" + (ultimo_lavoro if ultimo_lavoro else "Nessun dato.")
 
     st.download_button(
         label="💾 SALVA RISULTATO",
-        data=report_content,
+        data=report_pulp,
         file_name="risultato_rewire.txt",
         mime="text/plain",
         use_container_width=True
@@ -137,10 +109,10 @@ with st.sidebar:
         st.session_state.active_prompt = None
         st.rerun()
 
-# --- AREA CENTRALE (DASHBOARD) ---
+# --- AREA CENTRALE (DASHBOARD REWIRE AI) ---
 
-# Caso A: Sistema in attesa (Titolo Gigante)
 if not st.session_state.messages:
+    # IL CUORE DELL'APP: TITOLO GIGANTE ROSSO AL CENTRO
     st.markdown("""
         <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 70vh;">
             <div style="text-align: center; border: 3px solid #ff4b4b; padding: 50px; border-radius: 30px; background-color: rgba(255, 75, 75, 0.03); box-shadow: 0px 0px 50px rgba(255, 75, 75, 0.1);">
@@ -161,28 +133,24 @@ if not st.session_state.messages:
         </style>
     """, unsafe_allow_html=True)
 
-# Caso B: Lavoro in corso (Visualizzazione Chat)
 else:
+    # Mostra solo il lavoro quando attivo
     st.markdown("<h2 style='color: #ff4b4b;'>🧠 REWIRE AI <span style='font-size: 1rem; color: #444;'>WORKING...</span></h2>", unsafe_allow_html=True)
     for m in st.session_state.messages:
         with st.chat_message(m["role"]):
             st.markdown(m["content"])
 
 # --- INPUT UTENTE ---
-user_query = st.chat_input("Digita un comando o usa i prompt rapidi...")
+user_query = st.chat_input("Chiedi a Rewire...")
 
-# Logica di attivazione (da input o da tasti sidebar)
+# Logica di attivazione
 prompt_to_send = user_query or st.session_state.active_prompt
 
 if prompt_to_send:
-    # Aggiungi query utente alla sessione
     st.session_state.messages.append({"role": "user", "content": prompt_to_send})
-    # Reset del prompt rapido per non ripeterlo al prossimo rerun
-    st.session_state.active_prompt = None
+    st.session_state.active_prompt = None # Pulisce il prompt dopo l'invio
     
-    with st.spinner("⚡ Elaborazione in corso..."):
+    with st.spinner("⚡ Elaborazione..."):
         risposta = call_rewire_brain(prompt_to_send, pdf_text)
         st.session_state.messages.append({"role": "assistant", "content": risposta})
-    
     st.rerun()
-
