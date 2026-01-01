@@ -83,10 +83,6 @@ with st.sidebar:
         st.session_state.messages = []
         st.rerun()
 
-    if st.button("🔴 LOGOUT"):
-        st.session_state.logged_in = False
-        st.rerun()
-
 # AREA CHAT CENTRALE
 if not st.session_state.messages:
     st.markdown('<div class="main-logo"><h1>🧠 REWIRE AI</h1><p>FACTORY EDITION</p></div>', unsafe_allow_html=True)
@@ -118,3 +114,4 @@ if prompt := st.chat_input("Chiedi all'AI o carica un PDF..."):
             st.session_state.messages.append({"role": "assistant", "content": risposta})
         except Exception as e:
             st.error("Errore AI. Controlla la tua GROQ_API_KEY nei Secrets.")
+
