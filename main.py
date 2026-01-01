@@ -55,7 +55,7 @@ for m in st.session_state.messages:
         if "image" in m: st.image(m["image"], width=300)
         st.markdown(m["content"])
 
-# 6. LOGICA DI RISPOSTA (CORRETTA)
+# 6. LOGICA DI RISPOSTA AGGIORNATA (MODELLI 2026)
 if prompt := st.chat_input("Chiedi a Rewire..."):
     user_msg = {"role": "user", "content": prompt}
     img_b64 = None
@@ -74,17 +74,23 @@ if prompt := st.chat_input("Chiedi a Rewire..."):
     with st.chat_message("assistant"):
         with st.spinner("Rewire sta elaborando..."):
             try:
-                model = "llama-3.2-11b-vision-preview" if img_b64 else "llama-3.3-70b-versatile"
+                # AGGIORNAMENTO MODELLI: Llama 3.2 90b per Vision, Llama 3.3 70b per Testo
+                model = "llama-3.2-90b-vision-preview" if img_b64 else "llama-3.3-70b-versatile"
                 
-                # Costruzione messaggi
                 api_msgs = [{"role": "system", "content": "Sei Rewire AI, rispondi in italiano."}]
                 for m in st.session_state.messages[-5:-1]:
                     api_msgs.append({"role": m["role"], "content": m["content"]})
                 
-                content = [{"type": "text", "text": prompt}, {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{img_b64}"}}] if img_b64 else prompt
+                if img_b64:
+                    content = [
+                        {"type": "text", "text": prompt},
+                        {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{img_b64}"}}
+                    ]
+                else:
+                    content = prompt
+                    
                 api_msgs.append({"role": "user", "content": content})
 
-                # Chiamata API
                 resp = requests.post(
                     "https://api.groq.com/openai/v1/chat/completions",
                     headers={"Authorization": f"Bearer {GROQ_API_KEY}"},
@@ -94,15 +100,13 @@ if prompt := st.chat_input("Chiedi a Rewire..."):
                 
                 data = resp.json()
 
-                # GESTIONE ERRORE 'CHOICES'
                 if "choices" in data:
                     ans = data['choices'][0]['message']['content']
                     st.markdown(ans)
                     st.session_state.messages.append({"role": "assistant", "content": ans})
                 else:
-                    # Se Groq risponde con un errore (es. quota esaurita)
-                    error_msg = data.get("error", {}).get("message", "Errore sconosciuto dalle API")
-                    st.error(f"L'AI non può rispondere: {error_msg}")
+                    error_info = data.get("error", {}).get("message", "Errore sconosciuto")
+                    st.error(f"Errore API: {error_info}")
                     
             except Exception as e:
                 st.error(f"Errore di connessione: {e}")
