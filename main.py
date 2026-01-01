@@ -1,25 +1,4 @@
-import streamlit as st
-import pandas as pd
-# Serve una libreria per connettersi a Google Sheets facilmente
-# (Aggiungi 'st-gsheets-connection' nel tuo requirements.txt)
-from stripr.gsheetsconnection import GSheetsConnection
 
-# --- FUNZIONE PER GESTIRE IL DATABASE UTENTI ---
-def get_user_db():
-    conn = st.connection("gsheets", type=GSheetsConnection)
-    return conn.read(worksheet="Foglio1")
-
-def save_new_user(username, password):
-    conn = st.connection("gsheets", type=GSheetsConnection)
-    df = get_user_db()
-    
-    if username in df['username'].values:
-        return False # Utente esiste già
-    
-    new_data = pd.DataFrame([{"username": username, "password": password}])
-    updated_df = pd.concat([df, new_data], ignore_index=True)
-    conn.update(worksheet="Foglio1", data=updated_df)
-    return True
 
 # --- INTERFACCIA DI ACCESSO ---
 def login_signup_page():
@@ -28,7 +7,25 @@ def login_signup_page():
     tab1, tab2 = st.tabs(["Login", "Registrati"])
     
     with tab1:
-        u = st.text_input("Username", key="l_user")
+        u = import streamlit as st
+from streamlit_gsheets import GSheetsConnection
+
+# Questa riga ora userà il link pubblico che hai messo nei Secrets
+conn = st.connection("gsheets", type=GSheetsConnection)
+
+def get_user_db():
+    # Legge il foglio senza bisogno di chiavi JSON
+    return conn.read()
+
+def save_new_user(username, password):
+    df = get_user_db()
+    if username in df['username'].values:
+        return False 
+    new_data = pd.DataFrame([{"username": username, "password": password}])
+    updated_df = pd.concat([df, new_data], ignore_index=True)
+    # Aggiorna il foglio
+    conn.update(data=updated_df)
+    return Truest.text_input("Username", key="l_user")
         p = st.text_input("Password", type="password", key="l_pass")
         if st.button("Entra"):
             db = get_user_db()
@@ -149,4 +146,5 @@ if check_password():
             risposta = call_rewire_brain(prompt_to_send, pdf_text)
             st.session_state.messages.append({"role": "assistant", "content": risposta})
         st.rerun()
+
 
