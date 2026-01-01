@@ -10,11 +10,13 @@ API_URL = "https://api.groq.com/openai/v1/chat/completions"
 
 st.set_page_config(page_title="RE-WIRE AI Factory", layout="wide", page_icon="⚙️")
 
-# --- CSS PROFESSIONALE ---
+# --- STILE FACTORY (CSS) ---
 st.markdown("""
     <style>
     .stApp { background-color: #0e1117; color: white; }
     [data-testid="stSidebar"] { background-color: #1a1c24; border-right: 1px solid #333; }
+    
+    /* Box Anteprima File */
     .file-preview-card {
         background-color: #1e212b;
         border-radius: 12px;
@@ -23,10 +25,10 @@ st.markdown("""
         margin-bottom: 20px;
         text-align: center;
     }
-    .stButton>button { width: 100%; border-radius: 8px; margin-bottom: 10px; }
-    /* Colore specifico per i tasti */
-    .btn-save { background-color: #10b981 !important; color: white !important; }
-    .btn-reset { background-color: #ef4444 !important; color: white !important; }
+    
+    /* Pulsanti Sidebar */
+    .stButton>button { width: 100%; border-radius: 8px; margin-bottom: 10px; font-weight: bold; }
+    .stDownloadButton>button { width: 100%; border-radius: 8px; background-color: #10b981 !important; color: white !important; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -35,9 +37,9 @@ if "auth" not in st.session_state: st.session_state.auth = False
 if not st.session_state.auth:
     col1, col2, col3 = st.columns([1, 1.5, 1])
     with col2:
-        st.title("⚙️ Accesso Riservato")
-        pwd = st.text_input("Inserisci Password", type="password")
-        if st.button("ACCEDI"):
+        st.title("⚙️ Accesso Factory")
+        pwd = st.text_input("Codice Operatore:", type="password")
+        if st.button("SBLOCCA"):
             if pwd == "rewire2026":
                 st.session_state.auth = True
                 st.rerun()
@@ -48,15 +50,15 @@ if "messages" not in st.session_state: st.session_state.messages = []
 if "doc_text" not in st.session_state: st.session_state.doc_text = ""
 if "file_view" not in st.session_state: st.session_state.file_view = None
 
-# --- SIDEBAR (PUNTO 1: TASTI MANCANTI) ---
+# --- SIDEBAR (PULSANTI RICHIESTI) ---
 with st.sidebar:
     st.markdown("### 🚀 RE-WIRE AI")
     st.markdown("**Operatore:** GIANNI")
     st.divider()
     
-    # 1. TASTO CARICA FILE
-    st.markdown("#### 📁 Caricamento Asset")
-    uploaded_file = st.file_uploader("Scegli un file...", type=["pdf", "jpg", "png"], label_visibility="collapsed")
+    # 1. PULSANTE CARICA FILE
+    st.markdown("#### 📁 Carica Asset")
+    uploaded_file = st.file_uploader("Trascina qui PDF o JPG", type=["pdf", "jpg", "png"], label_visibility="collapsed")
     if uploaded_file:
         if "fname" not in st.session_state or st.session_state.fname != uploaded_file.name:
             st.session_state.fname = uploaded_file.name
@@ -72,17 +74,17 @@ with st.sidebar:
 
     st.divider()
 
-    # 2. TASTO SALVA LAVORO
+    # 2. PULSANTE SALVA LAVORO
     if st.session_state.messages:
         chat_full = "\n".join([f"{m['role'].upper()}: {m['content']}" for m in st.session_state.messages])
         st.download_button(
-            label="📥 SALVA LAVORO",
+            label="📥 SALVA LAVORO (TXT)",
             data=chat_full,
-            file_name=f"report_{st.session_state.get('fname', 'chat')}.txt",
+            file_name=f"factory_report_{st.session_state.get('fname', 'sessione')}.txt",
             use_container_width=True
         )
 
-    # 3. TASTO SVUOTA CHAT
+    # 3. PULSANTE SVUOTA CHAT
     if st.button("🗑️ SVUOTA CHAT", use_container_width=True):
         st.session_state.messages = []
         st.session_state.doc_text = ""
@@ -91,21 +93,21 @@ with st.sidebar:
         st.rerun()
     
     st.divider()
-    if st.button("🔴 ESCI"):
+    if st.button("🔴 ESCI (LOGOUT)"):
         st.session_state.auth = False
         st.rerun()
 
 # --- AREA CENTRALE ---
 st.markdown(f"## ⚙️ Factory Dashboard - Sessione di Gianni")
 
-# Visualizzazione Documento al centro (PUNTO 2)
+# Visualizzazione automatica del file caricato al centro
 if st.session_state.file_view:
     st.markdown('<div class="file-preview-card">', unsafe_allow_html=True)
     if st.session_state.file_view["type"] == "img":
         st.image(st.session_state.file_view["content"], caption=st.session_state.fname, use_container_width=True)
     else:
-        st.info(f"Contenuto PDF: {st.session_state.fname}")
-        st.text_area("", st.session_state.file_view["content"], height=200)
+        st.info(f"Anteprima PDF: {st.session_state.fname}")
+        st.text_area("", st.session_state.file_view["content"], height=150)
     st.markdown('</div>', unsafe_allow_html=True)
 
 # Chat
@@ -113,7 +115,7 @@ for m in st.session_state.messages:
     with st.chat_message(m["role"]):
         st.markdown(m["content"])
 
-# Input prompt
+# Input
 if prompt := st.chat_input("Digita un comando..."):
     st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"): st.markdown(prompt)
