@@ -4,9 +4,7 @@ import base64
 from PIL import Image
 import io
 
-# ---------------------------------------------------------
-# 1. SETUP UI - DARK MODE PREMIUM
-# ---------------------------------------------------------
+# 1. SETUP UI - DARK MODE PROFESSIONALE
 st.set_page_config(page_title="REWIRE AI PRO", page_icon="⚡", layout="wide")
 
 st.markdown("""
@@ -27,40 +25,38 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# ---------------------------------------------------------
-# 2. INIZIALIZZAZIONE
-# ---------------------------------------------------------
-if "auth" not in st.session_state: st.session_state.auth = False
-if "messages" not in st.session_state: st.session_state.messages = []
+# 2. INIZIALIZZAZIONE STATI
+if "auth" not in st.session_state:
+    st.session_state.auth = False
+if "messages" not in st.session_state:
+    st.session_state.messages = []
 
+# Recupero chiave dai Secrets
 try:
     GROQ_API_KEY = st.secrets["GROQ_API_KEY"]
-except:
-    st.error("Configura GROQ_API_KEY nei Secrets.")
+except Exception:
+    st.error("Errore: Chiave API mancante nei Secrets.")
     st.stop()
 
-# ---------------------------------------------------------
 # 3. LOGIN
-# ---------------------------------------------------------
 if not st.session_state.auth:
     _, col, _ = st.columns([1, 1, 1])
     with col:
         st.markdown("<h1 style='text-align: center; color: #6366f1;'>⚡ REWIRE AI</h1>", unsafe_allow_html=True)
-        with st.form("login"):
-            pwd = st.text_input("Licenza Pro 2026:", type="password")
-            if st.form_submit_button("SBLOCCA"):
+        with st.form("login_panel"):
+            pwd = st.text_input("Password Licenza 2026:", type="password")
+            if st.form_submit_button("SBLOCCA APPLICAZIONE"):
                 if pwd == "rewire2026":
                     st.session_state.auth = True
                     st.rerun()
-                else: st.error("Password errata.")
+                else:
+                    st.error("Password errata.")
     st.stop()
 
-# ---------------------------------------------------------
-# 4. SIDEBAR E CARICAMENTO FILE
-# ---------------------------------------------------------
+# 4. SIDEBAR
 with st.sidebar:
-    st.title("⚙️ Pannello")
-    uploaded_file = st.file_uploader("Allega un'immagine", type=["png", "jpg", "jpeg"])
+    st.title("⚙️ Pannello Controllo")
+    uploaded_file = st.file_uploader("Allega immagine per analisi", type=["png", "jpg", "jpeg"])
     if st.button("🗑️ Reset Chat"):
         st.session_state.messages = []
         st.rerun()
@@ -68,58 +64,68 @@ with st.sidebar:
         st.session_state.auth = False
         st.rerun()
 
-# ---------------------------------------------------------
-# 5. AREA CHAT
-# ---------------------------------------------------------
+# 5. VISUALIZZAZIONE CHAT
 st.markdown("<h2 style='color: #6366f1;'>🚀 Smart AI Workspace</h2>", unsafe_allow_html=True)
 
-# Visualizzazione cronologia messaggi (Inclusi i file salvati nello stato)
 for m in st.session_state.messages:
     with st.chat_message(m["role"]):
         if "image" in m:
             st.image(m["image"], width=300)
         st.markdown(m["content"])
 
-# INPUT CHAT
-if prompt := st.chat_input("Chiedi qualcosa..."):
+# 6. LOGICA DI RISPOSTA
+if prompt := st.chat_input("Scrivi un messaggio o chiedi dell'immagine..."):
     
-    # Prepariamo il dizionario del messaggio utente
-    user_msg = {"role": "user", "content": prompt}
-    
-    # Se c'è un file caricato, lo aggiungiamo al messaggio e lo mostriamo
+    # Gestione Immagine
     img_b64 = None
+    current_user_msg = {"role": "user", "content": prompt}
+    
     if uploaded_file:
-        img_data = uploaded_file.getvalue()
-        user_msg["image"] = img_data # Salviamo i byte per visualizzarli dopo
-        img_b64 = base64.b64encode(img_data).decode()
+        raw_data = uploaded_file.getvalue()
+        current_user_msg["image"] = raw_data # Salvataggio per visualizzazione
+        img_b64 = base64.b64encode(raw_data).decode()
 
-    # Mostriamo il messaggio utente immediatamente
+    # Mostra messaggio utente
     with st.chat_message("user"):
         if uploaded_file:
             st.image(uploaded_file, width=300)
         st.markdown(prompt)
     
-    st.session_state.messages.append(user_msg)
+    st.session_state.messages.append(current_user_msg)
 
-    # RISPOSTA AI
+    # Chiamata API Groq
     with st.chat_message("assistant"):
-        with st.spinner("Analisi in corso..."):
+        with st.spinner("Rewire sta elaborando..."):
             try:
-                model = "llama-3.2-11b-vision-preview" if img_b64 else "llama-3.3-70b-versatile"
-                headers = {"Authorization": f"Bearer {GROQ_API_KEY}"}
+                # Scelta modello
+                selected_model = "llama-3.2-11b-vision-preview" if img_b64 else "llama-3.3-70b-versatile"
                 
-                # Costruiamo il payload per Groq
-                msgs_payload = [{"role": "system", "content": "Sei Rewire AI, rispondi in italiano."}]
-                # Aggiungiamo cronologia (solo testo per semplicità nelle API, tranne l'ultimo)
-                for m in st.session_state.messages[-4:-1]:
-                    msgs_payload.append({"role": m["role"], "content": m["content"]})
+                # Costruzione messaggi per API
+                api_msgs = [{"role": "system", "content": "Sei Rewire AI, un assistente professionale."}]
+                for m in st.session_state.messages[-5:-1]:
+                    api_msgs.append({"role": m["role"], "content": m["content"]})
                 
                 if img_b64:
-                    content = [
+                    user_payload = [
                         {"type": "text", "text": prompt},
                         {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{img_b64}"}}
                     ]
                 else:
-                    content = prompt
+                    user_payload = prompt
                 
-                msgs_
+                api_msgs.append({"role": "user", "content": user_payload})
+
+                # Chiamata effettiva
+                response = requests.post(
+                    "https://api.groq.com/openai/v1/chat/completions",
+                    headers={"Authorization": f"Bearer {GROQ_API_KEY}"},
+                    json={"model": selected_model, "messages": api_msgs, "temperature": 0.5},
+                    timeout=30
+                )
+                
+                full_response = response.json()['choices'][0]['message']['content']
+                st.markdown(full_response)
+                st.session_state.messages.append({"role": "assistant", "content": full_response})
+                
+            except Exception as e:
+                st.error(f"Errore tecnico: {str(e)}")
